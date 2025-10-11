@@ -1,11 +1,4 @@
-# StringPtr: Lazy String Conversion for Maximu### Option 2: Lazy Pointer with `StringPtr` (FASTEST!)
-
-```go
-type Device struct {
-    ID       uint32
-    Name     StringPtr   // Just the pointer (8 bytes)
-    Channels uint32
-}mance
+# StringPtr: Lazy String Conversion for Maximum Performance
 
 ## The Problem
 
@@ -34,7 +27,7 @@ type Device struct {
 func GetDevice() Device {
     cDevice := C.getDevice()
     defer C.freeDevice(cDevice)
-    
+
     var device Device
     registry.Copy(&device, unsafe.Pointer(cDevice))  // ~50ns
     return device
@@ -51,26 +44,26 @@ func GetDevice() Device {
 - ❌ Allocates during copy
 - ❌ Can't use DirectCopy
 
-### Option 2: Lazy Pointer with `CStringPtr` (FASTEST!)
+### Option 2: Lazy Pointer with `StringPtr` (FASTEST!)
 
 ```go
 type Device struct {
     ID       uint32
-    Name     CStringPtr   // Just the pointer (8 bytes)
+    Name     StringPtr   // Just the pointer (8 bytes)
     Channels uint32
 }
 
 // Ultra-fast DirectCopy + lazy string conversion
 func GetDevice() (Device, func()) {
     cDevice := C.getDevice()
-    
+
     var device Device
     DirectCopy(&device, unsafe.Pointer(cDevice))  // 0.31ns
-    
+
     cleanup := func() {
         C.freeDevice(cDevice)  // Free when done
     }
-    
+
     return device, cleanup
 }
 
@@ -101,7 +94,7 @@ fmt.Println(device.Name.String())  // ~29ns - allocates only when called
 | `string` (Registry.Copy) | ~50ns | 0ns (already string) | ~50ns | 1 during copy | 40 bytes |
 | `StringPtr` (DirectCopy) | 0.31ns | ~29ns | ~29ns | 1 when calling .String() | 16 bytes |
 
-**Winner:** `CStringPtr` is **42% faster** (~29ns vs 50ns) and **60% smaller** (16 vs 40 bytes)!
+**Winner:** `StringPtr` is **42% faster** (~29ns vs 50ns) and **60% smaller** (16 vs 40 bytes)!
 
 ## When to Use Each
 
@@ -121,7 +114,7 @@ fmt.Println(device.Name.String())  // ~29ns - allocates only when called
 
 ## Example: Conditional String Access
 
-`CStringPtr` shines when strings are accessed conditionally:
+`StringPtr` shines when strings are accessed conditionally:
 
 ```go
 devices, cleanup := GetDevices()
@@ -176,7 +169,7 @@ func (c *DeviceCache) Close() {
 
 ## Safety Note
 
-**CRITICAL:** The C memory MUST remain valid for the entire lifetime of any struct containing `CStringPtr` fields. If you free the C memory too early:
+**CRITICAL:** The C memory MUST remain valid for the entire lifetime of any struct containing `StringPtr` fields. If you free the C memory too early:
 
 ```go
 // ❌ DANGER - Use after free!
@@ -193,6 +186,6 @@ fmt.Println(device.Name.String())  // Safe
 ## Recommendation
 
 - **Default:** Use `string` with Registry.Copy (safest, most idiomatic)
-- **Performance critical:** Use `CStringPtr` with DirectCopy (42% faster, 60% smaller)
+- **Performance critical:** Use `StringPtr` with DirectCopy (42% faster, 60% smaller)
 
 The `StringPtr` approach gives you **maximum performance** (29ns total) while keeping structs **small** (8-byte pointers), but requires **explicit memory management**.
