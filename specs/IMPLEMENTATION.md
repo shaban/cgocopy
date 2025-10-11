@@ -3,7 +3,7 @@
 ## | Op## Performance Characteristics
 
 **⚠️ Performance Caveats:**
-- All benchmarks measured on: **macOS (Darwin), x86_64 architecture, Apple Silicon**
+- All benchmarks measured on: **macOS (Darwin), ARM64 architecture, Apple Silicon**
 - Performance may vary significantly on different platforms, compilers, and hardware
 - String conversion times depend on string length and memory allocation patterns
 - Registry validation overhead occurs once at registration time, not per copy

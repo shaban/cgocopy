@@ -32,7 +32,7 @@ Do you have char* fields that need string conversion?
 ```
 
 **⚠️ Performance Caveats:**
-- All benchmarks measured on: **macOS (Darwin), x86_64 architecture, Apple Silicon**
+- All benchmarks measured on: **macOS (Darwin), ARM64 architecture, Apple Silicon**
 - Performance may vary significantly across platforms, compilers, and hardware configurations
 - String conversion times depend on string length and memory allocation patterns
 - Registry validation overhead occurs once at registration time, not per copy operation
