@@ -103,7 +103,7 @@ C.freeDevice(cDevice)  // ✅ C memory can be freed immediately
 - [STRINGPTR.md](STRINGPTR.md) - StringPtr detailed guide
 - [specs/USAGE_GUIDE.md](specs/USAGE_GUIDE.md) - When to use which approach
 - [specs/IMPLEMENTATION.md](specs/IMPLEMENTATION.md) - Technical details
-- [specs/REGISTRY_IMPROVEMENTS.md](specs/REGISTRY_IMPROVEMENTS.md) - AutoLayout and improvements
+- [specs/REGISTRY.md](specs/REGISTRY.md) - Registry API guide
 - [specs/WHEN_TO_USE_REGISTRY.md](specs/WHEN_TO_USE_REGISTRY.md) - Registry detailed guide
 
 ## API Reference
