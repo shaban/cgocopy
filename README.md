@@ -90,7 +90,13 @@ C.freeDevice(cDevice)  // ✅ C memory can be freed immediately
 | Direct | 0.3ns | Primitives only |
 | Direct + StringPtr | 29ns/string | Lazy string access |
 | Direct + 3 strings | ~65ns | Manual string conversion |
-| Registry.Copy | ~174ns | Automatic strings, validation |
+| Registry.Copy | ~110ns primitives, ~170ns with strings | Automatic strings, validation |
+
+**⚠️ Performance Notes:**
+- Benchmarks measured on: **macOS (Darwin), x86_64 architecture, Apple Silicon**
+- Performance may vary significantly across platforms, compilers, and hardware configurations
+- String conversion times depend on string length and memory allocation patterns
+- Registry validation overhead occurs once at registration time, not per copy operation
 
 ## Documentation
 
@@ -177,4 +183,4 @@ go test -bench .
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-Copyright (c) 2025 macaudio contributors
+Copyright (c) 2025 shaban

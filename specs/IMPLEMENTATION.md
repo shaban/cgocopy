@@ -1,15 +1,36 @@
 # Implementation Specifications
 
-## Architecture
+## | Op## Performance Characteristics
 
-The structcopy package provides type-safe copying between C and Go structs through two approaches:
+**⚠️ Performance Caveats:**
+- All benchmarks measured on: **macOS (Darwin), x86_64 architecture, Apple Silicon**
+- Performance may vary significantly on different platforms, compilers, and hardware
+- String conversion times depend on string length and memory allocation patterns
+- Registry validation overhead occurs once at registration time, not per copy
+- Direct operations are compiler-inlined and may vary with optimization levels
 
-### DirectCopy
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Direct | 0.3ns | Compiler-inlined |
+| DirectArray (per element) | 0.3ns | Inlined loop |
+| Registry.Copy (primitives only) | ~110ns | Includes validation |
+| Registry.Copy (with strings) | ~170ns | Includes string allocation |
+| String conversion | ~20-85ns | Scales ~0.7ns per character | Time | Notes |
+|-----------|------|-------|
+| Direct | 0.3ns | Compiler-inlined |
+| DirectArray (per element) | 0.3ns | Inlined loop |
+| Registry.Copy (primitives only) | ~110ns | Includes validation |
+| Registry.Copy (with strings) | ~170ns | Includes string allocation |
+| String conversion | ~20-85ns | Scales ~0.7ns per character |cture
+
+The cgocopy package provides type-safe copying between C and Go structs through two approaches:
+
+### Direct
 
 Zero-overhead copying for structs containing only primitives and fixed-size arrays.
 
 ```go
-DirectCopy[T](&goStruct, cPtr)  // 0.3ns, compiler-inlined
+Direct[T any](dst *T, src unsafe.Pointer)  // 0.3ns, compiler-inlined
 ```
 
 Limitations:
@@ -36,8 +57,8 @@ Features:
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| DirectCopy | 0.3ns | Compiler-inlined |
-| DirectCopyArray (per element) | 0.3ns | Inlined loop |
+| Direct | 0.3ns | Compiler-inlined |
+| DirectArray (per element) | 0.3ns | Inlined loop |
 | Registry.Copy (primitives only) | ~50ns | Includes validation |
 | Registry.Copy (with strings) | ~50-100ns | Depends on string length |
 | String conversion | ~20-85ns | Scales ~0.7ns per character |
@@ -66,7 +87,7 @@ type Device struct {
 // Benefit: C memory can be freed immediately
 ```
 
-### 3. DirectCopy (Primitives only)
+### 3. Direct (Primitives only)
 ```go
 type Device struct {
     ID uint32
@@ -93,7 +114,7 @@ The package captures actual alignment at compile time via `ArchInfo`.
 Calculates offsets automatically for standard C structs:
 
 ```go
-layout := structcopy.AutoLayout("uint32_t", "char*", "float")
+layout := cgocopy.AutoLayout("uint32_t", "char*")
 ```
 
 Tested accuracy: 100% across 31 fields in 8 struct patterns.
@@ -132,7 +153,7 @@ layout := []FieldInfo{
 
 Or use AutoLayout:
 ```go
-layout := structcopy.AutoLayout("uint32_t", "char*")
+layout := cgocopy.AutoLayout("uint32_t", "char*")
 ```
 
 ## Validation
@@ -167,7 +188,7 @@ The package handles platform differences through:
 
 ## Use Case Selection
 
-### DirectCopy + CStringPtr
+### Direct + CStringPtr
 Use when:
 - Performance critical (hot path)
 - Can manage C memory lifetime

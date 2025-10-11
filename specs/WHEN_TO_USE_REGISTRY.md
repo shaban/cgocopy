@@ -5,14 +5,14 @@
 ```
 Do you have char* pointers? 
 ├─ YES → Can you manage C memory lifetime explicitly?
-│   ├─ YES → Use CStringPtr + DirectCopy ⚡ (fastest: 29ns)
-│   └─ NO  → Use Registry.Copy with converter (safe: 50ns)
-└─ NO → Use DirectCopy (fastest: 0.31ns)
+│   ├─ YES → Use CStringPtr + Direct ⚡ (fastest: 29ns)
+│   └─ NO  → Use Registry.Copy with converter (safe: 110-170ns)
+└─ NO → Use Direct (fastest: 0.31ns)
 ```
 
 ## The Current Stack (After CStringPtr)
 
-### ✅ DirectCopy + CStringPtr (What we use now)
+### ✅ Direct + CStringPtr (What we use now)
 ```go
 type Device struct {
     ID   uint32
@@ -22,7 +22,7 @@ type Device struct {
 
 devices := make([]Device, count)
 cSize := unsafe.Sizeof(C.Device{})
-structcopy.DirectCopyArray(devices, unsafe.Pointer(cDevices), cSize)
+cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)
 ```
 
 **Performance:** 0.31ns copy + 29ns lazy String() = **29ns total**
@@ -58,7 +58,7 @@ type Device struct {
 }
 
 // Register with string converter
-layout := []structcopy.FieldInfo{
+layout := []cgocopy.FieldInfo{
     {Offset: 0, Size: 4, TypeName: "uint32_t"},
     {Offset: 8, Size: 8, TypeName: "char*", IsString: true},  // Mark as string
     {Offset: 16, Size: 4, TypeName: "uint32_t"},
@@ -90,7 +90,7 @@ func GetDevice() (Device, error) {
 - ✅ Most idiomatic Go code
 - ✅ No use-after-free bugs possible
 
-**Performance:** ~50ns per struct (includes string allocation)
+**Performance:** ~110-170ns per struct (includes string allocation)
 
 ---
 
@@ -115,7 +115,7 @@ typedef struct {
 
 // Capture layout at init time
 func init() {
-    layout := []structcopy.FieldInfo{
+    layout := []cgocopy.FieldInfo{
         {Offset: C.offsetof_flags(), Size: 1, TypeName: "uint8_t"},
         {Offset: C.offsetof_id(), Size: 4, TypeName: "uint32_t"},
         {Offset: C.offsetof_timestamp(), Size: 8, TypeName: "double"},
@@ -217,7 +217,7 @@ Now we create a Go data structure describing the C layout:
 ```go
 func init() {
     // Capture the C struct's layout
-    layout := []structcopy.FieldInfo{
+    layout := []cgocopy.FieldInfo{
         {
             Offset:   uintptr(C.deviceIdOffset()),    // Where in memory?
             Size:     4,                               // How big?
@@ -478,8 +478,8 @@ for i, fieldMapping := range mapping.Fields {
    - Allocates a new Go string (GC-managed)
    - C memory can be freed immediately after Copy
 
-4. **Why not always use DirectCopy?**
-   - DirectCopy is just: `*dst = *src` (raw memory copy)
+4. **Why not always use Direct?**
+   - Direct is just: `*dst = *src` (raw memory copy)
    - Works for primitives and matching layouts
    - Doesn't handle `char*` → `string` conversion
    - Doesn't validate layouts
@@ -539,11 +539,11 @@ registry.Copy(&engine, cEnginePtr)
 
 ## Comparison Table
 
-| Feature | DirectCopy + CStringPtr | Registry.Copy + Converter |
+| Feature | Direct + CStringPtr | Registry.Copy + Converter |
 |---------|-------------------------|---------------------------|
-| **Copy Speed** | 0.31ns | ~50ns |
+| **Copy Speed** | 0.31ns | ~110-170ns |
 | **String Access** | 29ns (lazy) | 0ns (already string) |
-| **Total (if accessed)** | 29ns | 50ns |
+| **Total (if accessed)** | 29ns | 110-170ns |
 | **Memory Management** | Manual (cleanup func) | Automatic (GC) |
 | **C Memory Lifetime** | Must keep alive | Can free immediately |
 | **Struct Type** | CStringPtr | string |
@@ -557,7 +557,7 @@ registry.Copy(&engine, cEnginePtr)
 
 ## Real-World Decision Guide
 
-### ✅ Use DirectCopy + CStringPtr when:
+### ✅ Use Direct + CStringPtr when:
 1. Performance is critical (every nanosecond matters)
 2. Strings accessed rarely or conditionally
 3. You're willing to manage C memory explicitly
@@ -574,7 +574,7 @@ registry.Copy(&engine, cEnginePtr)
 6. Want runtime validation of struct compatibility
 7. Example: Configuration loading, API responses, persistent data
 
-### ✅ Use DirectCopy (no CStringPtr) when:
+### ✅ Use Direct (no CStringPtr) when:
 1. No strings at all (primitives only)
 2. Absolute maximum performance needed
 3. Example: Audio sample buffers, real-time processing
@@ -602,7 +602,7 @@ type Device struct {
 registry.Copy(&device, cPtr)
 
 // Now:
-DirectCopy(&device, cPtr)
+Direct(&device, cPtr)
 
 // Step 5: Add cleanup pattern
 devices, cleanup := GetDevices()
@@ -615,7 +615,7 @@ defer cleanup()
 
 **The Registry is NOT obsolete!** It serves a different use case:
 
-- **CStringPtr + DirectCopy**: Performance-first, explicit memory management
+- **CStringPtr + Direct**: Performance-first, explicit memory management
 - **Registry.Copy**: Safety-first, idiomatic Go, automatic memory management
 
 Both have their place. The devices package chose performance because:

@@ -42,6 +42,36 @@ func BenchmarkDirectArrayPlusStrings(b *testing.B) {
 	}
 }
 
+// Benchmark: Registry.Copy() with primitives only (no strings)
+func BenchmarkRegistryCopyPrimitives(b *testing.B) {
+	// Use the test struct from cgocopy_test.go (primitives only)
+	registry := NewRegistry()
+
+	cLayout := []FieldInfo{
+		{Offset: testStructIdOffset, Size: 4, TypeName: "int32_t"},
+		{Offset: testStructValueOffset, Size: 4, TypeName: "float"},
+		{Offset: testStructTimestampOffset, Size: 8, TypeName: "int64_t"},
+	}
+
+	goType := reflect.TypeOf(TestStruct{})
+	err := registry.Register(goType, testStructSize, cLayout)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	cStruct := CreateTestStruct()
+	defer FreeTestStruct(cStruct)
+
+	var goStruct TestStruct
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := registry.Copy(&goStruct, cStruct); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 // Benchmark: Registry.Copy() with automatic string conversion
 func BenchmarkRegistryCopy(b *testing.B) {
 	cPlugin := createPluginInfo()

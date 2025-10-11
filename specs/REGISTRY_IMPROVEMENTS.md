@@ -10,7 +10,7 @@ Based on 100% accurate offset prediction experiments, we've implemented three ma
 
 **Before:**
 ```go
-layout := []structcopy.FieldInfo{
+layout := []cgocopy.FieldInfo{
     {Offset: 0, Size: 4, TypeName: "uint32_t", IsString: false},
     {Offset: 8, Size: 8, TypeName: "char*", IsString: true},  // Manual flag
     {Offset: 16, Size: 4, TypeName: "float", IsString: false},
@@ -19,7 +19,7 @@ layout := []structcopy.FieldInfo{
 
 **After:**
 ```go
-layout := []structcopy.FieldInfo{
+layout := []cgocopy.FieldInfo{
     {Offset: 0, Size: 4, TypeName: "uint32_t"},
     {Offset: 8, Size: 8, TypeName: "char*"},  // IsString auto-deduced from "char*"
     {Offset: 16, Size: 4, TypeName: "float"},
@@ -43,7 +43,7 @@ layout := []structcopy.FieldInfo{
 
 **After:**
 ```go
-layout := []structcopy.FieldInfo{
+layout := []cgocopy.FieldInfo{
     {Offset: 0, Size: 0, TypeName: "uint32_t"},  // Size deduced from arch_info
     {Offset: 8, Size: 0, TypeName: "char*"},     // Size deduced from arch_info
     {Offset: 16, Size: 0, TypeName: "float"},    // Size deduced from arch_info
@@ -52,7 +52,7 @@ layout := []structcopy.FieldInfo{
 
 Or simply omit `Size` entirely:
 ```go
-layout := []structcopy.FieldInfo{
+layout := []cgocopy.FieldInfo{
     {Offset: 0, TypeName: "uint32_t"},  // Size=0 is default, will be deduced
     {Offset: 8, TypeName: "char*"},
     {Offset: 16, TypeName: "float"},
@@ -75,7 +75,7 @@ size_t deviceNameOffset() { return offsetof(Device, name); }
 size_t deviceValueOffset() { return offsetof(Device, value); }
 
 // In Go
-layout := []structcopy.FieldInfo{
+layout := []cgocopy.FieldInfo{
     {Offset: uintptr(C.deviceIdOffset()), Size: 4, TypeName: "uint32_t"},
     {Offset: uintptr(C.deviceNameOffset()), Size: 8, TypeName: "char*"},
     {Offset: uintptr(C.deviceValueOffset()), Size: 4, TypeName: "float"},
@@ -85,7 +85,7 @@ layout := []structcopy.FieldInfo{
 **After (Automatic):**
 ```go
 // No C helpers needed!
-layout := structcopy.AutoLayout("uint32_t", "char*", "float")
+layout := cgocopy.AutoLayout("uint32_t", "char*", "float")
 ```
 
 `AutoLayout()` calculates offsets automatically using standard C alignment rules, validated to be 100% accurate across 8 different struct patterns (31 fields tested).
@@ -128,7 +128,7 @@ size_t deviceSize() { return sizeof(Device); }
 import "C"
 
 func init() {
-    layout := []structcopy.FieldInfo{
+    layout := []cgocopy.FieldInfo{
         {
             Offset:   uintptr(C.deviceIdOffset()),
             Size:     4,
@@ -178,7 +178,7 @@ size_t deviceSize() { return sizeof(Device); }  // Only 1 helper needed!
 import "C"
 
 func init() {
-    layout := structcopy.AutoLayout("uint32_t", "char*", "float")
+    layout := cgocopy.AutoLayout("uint32_t", "char*", "float")
     
     registry.Register(
         reflect.TypeOf(Device{}),
@@ -293,7 +293,7 @@ size_t deviceSize() { return sizeof(Device); }
 
 **Before:**
 ```go
-layout := []structcopy.FieldInfo{
+layout := []cgocopy.FieldInfo{
     {Offset: uintptr(C.deviceIdOffset()), Size: 4, TypeName: "uint32_t"},
     {Offset: uintptr(C.deviceNameOffset()), Size: 8, TypeName: "char*", IsString: true},
     {Offset: uintptr(C.deviceValueOffset()), Size: 4, TypeName: "float"},
@@ -302,7 +302,7 @@ layout := []structcopy.FieldInfo{
 
 **After:**
 ```go
-layout := structcopy.AutoLayout("uint32_t", "char*", "float")
+layout := cgocopy.AutoLayout("uint32_t", "char*", "float")
 ```
 
 ### Step 3: Test!
@@ -346,7 +346,7 @@ The improvements are **purely additive** - no breaking changes.
 You can mix both:
 ```go
 // Auto-calculate most fields
-layout := structcopy.AutoLayout("uint32_t", "char*", "float")
+layout := cgocopy.AutoLayout("uint32_t", "char*", "float")
 
 // Override specific fields if needed
 layout[1].Offset = uintptr(C.specialFieldOffset())
@@ -358,7 +358,7 @@ layout[1].Offset = uintptr(C.specialFieldOffset())
 
 ### Architecture Info Capture
 
-At `init()` time, the structcopy package:
+At `init()` time, the cgocopy package:
 
 1. Compiles a C test struct with various types
 2. Captures sizes using `sizeof()`
@@ -402,7 +402,7 @@ This implements the standard C struct layout rules.
 Run the offset prediction test to verify accuracy on your platform:
 
 ```bash
-cd structcopy
+cd cgocopy
 go test -v -run TestOffsetPredictionExperiment
 ```
 

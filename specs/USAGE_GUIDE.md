@@ -1,16 +1,43 @@
-# Usage Decision Guide
+# Us```
+Do you have char* fields that need string## Direct + CStringPtr
+
+### When to Use
+- Struct has char* fields
+- Performance critical
+- Can manage C memory explicitly
+- Strings accessed rarely or conditionally
+
+### Example
+```go
+type Device struct {
+    ID   uint32
+    Name cgocopy.StringPtr  // 8-byte pointer wrapper
+}
+
+devices := make([]Device, count)
+cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)ES → Can you manage C memory lifetime explicitly?
+│   ├─ YES → Direct + CStringPtr (29ns, manual cleanup)
+│   └─ NO  → Registry.Copy (50ns, automatic)
+└─ NO → Direct (0.3ns, primitives only)
+```ision Guide
 
 ## Quick Selection
 
 ```
 Do you have char* fields that need string conversion?
 ├─ YES → Can you manage C memory lifetime explicitly?
-│   ├─ YES → DirectCopy + CStringPtr (29ns, manual cleanup)
-│   └─ NO  → Registry.Copy + Converter (50ns, automatic)
-└─ NO → DirectCopy (0.3ns, primitives only)
+│   ├─ YES → Direct + CStringPtr (29ns, manual cleanup)
+│   └─ NO  → Registry.Copy (110-170ns, automatic)
+└─ NO → Direct (0.3ns, primitives only)
 ```
 
-## DirectCopy
+**⚠️ Performance Caveats:**
+- All benchmarks measured on: **macOS (Darwin), x86_64 architecture, Apple Silicon**
+- Performance may vary significantly across platforms, compilers, and hardware configurations
+- String conversion times depend on string length and memory allocation patterns
+- Registry validation overhead occurs once at registration time, not per copy operation
+
+## Direct
 
 ### When to Use
 - Struct contains only primitives and fixed-size arrays
@@ -28,7 +55,7 @@ type Device struct {
 
 devices := make([]Device, count)
 cSize := unsafe.Sizeof(C.Device{})
-structcopy.DirectCopyArray(devices, unsafe.Pointer(cDevices), cSize)
+cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)
 ```
 
 ### Performance
@@ -101,7 +128,7 @@ type Device struct {
 }
 
 // Register once at init
-layout := structcopy.AutoLayout("uint32_t", "char*")
+layout := cgocopy.AutoLayout("uint32_t", "char*")
 registry.Register(reflect.TypeOf(Device{}), cSize, layout, converter)
 
 // Use many times
@@ -116,9 +143,9 @@ func GetDevice() (Device, error) {
 ```
 
 ### Performance
-- ~50ns per struct (includes validation)
+- ~110ns per struct (includes validation)
 - String conversion: ~20-85ns per string
-- Total: ~50-100ns typical
+- Total: ~110-170ns typical
 
 ### Benefits
 - C memory freed immediately
@@ -143,9 +170,9 @@ Mix of primitives and strings at different levels, automatic recursive handling.
 
 ## Comparison
 
-| Aspect | DirectCopy | DirectCopy + CStringPtr | Registry.Copy |
+| Aspect | Direct | Direct + CStringPtr | Registry.Copy |
 |--------|-----------|------------------------|---------------|
-| Speed | 0.3ns | 29ns (with access) | 50-100ns |
+| Speed | 0.3ns | 29ns (with access) | 110-170ns |
 | Strings | No | Yes (lazy) | Yes (eager) |
 | Validation | No | No | Yes |
 | Memory | Manual | Manual | Automatic |
@@ -155,22 +182,22 @@ Mix of primitives and strings at different levels, automatic recursive handling.
 
 ## Migration Strategy
 
-### From Registry to DirectCopy
+### From Registry to Direct
 If Registry.Copy is a bottleneck:
 
 1. Measure: Confirm it's actually the bottleneck
 2. Assess: Can you manage C memory lifetime?
 3. Change struct: string → CStringPtr
-4. Change copy: registry.Copy() → DirectCopy()
+4. Change copy: registry.Copy() → Direct()
 5. Add cleanup: Implement cleanup function
 
-### From DirectCopy to Registry
+### From Direct to Registry
 If you need validation or automatic memory management:
 
 1. Change struct: CStringPtr → string
 2. Implement CStringConverter
 3. Register struct with layout
-4. Change copy: DirectCopy() → registry.Copy()
+4. Change copy: Direct() → registry.Copy()
 5. Remove cleanup: No longer needed
 
 ## Real-World Examples
@@ -178,7 +205,7 @@ If you need validation or automatic memory management:
 ### Audio Device Enumeration (Performance-critical)
 ```go
 // Hot path: enumerate 100+ devices frequently
-// Solution: DirectCopy + CStringPtr
+// Solution: Direct + CStringPtr
 // Reason: Names rarely accessed (filter by channels first)
 devices := EnumerateDevices()  // 0.3ns per device
 filtered := FilterByChannels(devices, 2)  // No string access
@@ -198,7 +225,7 @@ log.Printf("Port: %d", config.Port)
 ### Real-time Audio Processing (Maximum performance)
 ```go
 // Hot path: process audio samples every millisecond
-// Solution: DirectCopy (primitives only)
+// Solution: Direct (primitives only)
 // Reason: No strings, pure data, nanoseconds matter
 samples := GetAudioBuffer()  // 0.3ns per sample struct
 ProcessAudio(samples)
