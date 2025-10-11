@@ -1,4 +1,11 @@
-# CStringPtr: Lazy String Conversion for Maximum Performance
+# StringPtr: Lazy String Conversion for Maximu### Option 2: Lazy Pointer with `StringPtr` (FASTEST!)
+
+```go
+type Device struct {
+    ID       uint32
+    Name     StringPtr   // Just the pointer (8 bytes)
+    Channels uint32
+}mance
 
 ## The Problem
 
@@ -92,7 +99,7 @@ fmt.Println(device.Name.String())  // ~29ns - allocates only when called
 | Method | Copy Time | String Access | Total (if accessed) | Allocations | Struct Size |
 |--------|-----------|---------------|---------------------|-------------|-------------|
 | `string` (Registry.Copy) | ~50ns | 0ns (already string) | ~50ns | 1 during copy | 40 bytes |
-| `CStringPtr` (DirectCopy) | 0.31ns | ~29ns | ~29ns | 1 when calling .String() | 16 bytes |
+| `StringPtr` (DirectCopy) | 0.31ns | ~29ns | ~29ns | 1 when calling .String() | 16 bytes |
 
 **Winner:** `CStringPtr` is **42% faster** (~29ns vs 50ns) and **60% smaller** (16 vs 40 bytes)!
 
@@ -105,7 +112,7 @@ fmt.Println(device.Name.String())  // ~29ns - allocates only when called
 - ✅ 50ns overhead is acceptable
 - ✅ Want safest, most idiomatic option
 
-### Use `CStringPtr` with DirectCopy when:
+### Use `StringPtr` with DirectCopy when:
 - ✅ C has `char* name` (pointer - the common case)
 - ✅ Want fastest possible performance (42% faster)
 - ✅ String accessed rarely or conditionally
@@ -188,4 +195,4 @@ fmt.Println(device.Name.String())  // Safe
 - **Default:** Use `string` with Registry.Copy (safest, most idiomatic)
 - **Performance critical:** Use `CStringPtr` with DirectCopy (42% faster, 60% smaller)
 
-The `CStringPtr` approach gives you **maximum performance** (29ns total) while keeping structs **small** (8-byte pointers), but requires **explicit memory management**.
+The `StringPtr` approach gives you **maximum performance** (29ns total) while keeping structs **small** (8-byte pointers), but requires **explicit memory management**.

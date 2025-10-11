@@ -5,18 +5,18 @@
 ```
 Do you have char* pointers? 
 ├─ YES → Can you manage C memory lifetime explicitly?
-│   ├─ YES → Use CStringPtr + Direct ⚡ (fastest: 29ns)
+│   ├─ YES → Use StringPtr + Direct ⚡ (fastest: 29ns)
 │   └─ NO  → Use Registry.Copy with converter (safe: 110-170ns)
 └─ NO → Use Direct (fastest: 0.31ns)
 ```
 
-## The Current Stack (After CStringPtr)
+## The Current Stack (After StringPtr)
 
-### ✅ Direct + CStringPtr (What we use now)
+### ✅ Direct + StringPtr (What we use now)
 ```go
 type Device struct {
     ID   uint32
-    Name CStringPtr  // Just the pointer (8 bytes)
+    Name StringPtr  // Just the pointer (8 bytes)
     Size uint32
 }
 
@@ -496,7 +496,7 @@ Registration is worth the setup when:
 
 For your devices package, you skipped registration because:
 - ❌ No validation needed (you control both sides)
-- ❌ No string conversion needed (using CStringPtr)
+- ❌ No string conversion needed (using StringPtr)
 - ✅ Performance is critical (hot path)
 - ✅ Simple, predictable layout (#pragma pack(1))
 
@@ -539,14 +539,14 @@ registry.Copy(&engine, cEnginePtr)
 
 ## Comparison Table
 
-| Feature | Direct + CStringPtr | Registry.Copy + Converter |
+| Feature | Direct + StringPtr | Registry.Copy + Converter |
 |---------|-------------------------|---------------------------|
 | **Copy Speed** | 0.31ns | ~110-170ns |
 | **String Access** | 29ns (lazy) | 0ns (already string) |
 | **Total (if accessed)** | 29ns | 110-170ns |
 | **Memory Management** | Manual (cleanup func) | Automatic (GC) |
 | **C Memory Lifetime** | Must keep alive | Can free immediately |
-| **Struct Type** | CStringPtr | string |
+| **Struct Type** | StringPtr | string |
 | **Safety** | Explicit management | Safest |
 | **Idiomatic Go** | Less idiomatic | Most idiomatic |
 | **Use-after-free risk** | Yes (if misused) | No |
@@ -557,7 +557,7 @@ registry.Copy(&engine, cEnginePtr)
 
 ## Real-World Decision Guide
 
-### ✅ Use Direct + CStringPtr when:
+### ✅ Use Direct + StringPtr when:
 1. Performance is critical (every nanosecond matters)
 2. Strings accessed rarely or conditionally
 3. You're willing to manage C memory explicitly
@@ -574,7 +574,7 @@ registry.Copy(&engine, cEnginePtr)
 6. Want runtime validation of struct compatibility
 7. Example: Configuration loading, API responses, persistent data
 
-### ✅ Use Direct (no CStringPtr) when:
+### ✅ Use Direct (no StringPtr) when:
 1. No strings at all (primitives only)
 2. Absolute maximum performance needed
 3. Example: Audio sample buffers, real-time processing
@@ -594,7 +594,7 @@ BenchmarkCurrentCode(b)
 
 // Step 3: Change Go struct
 type Device struct {
-    Name CStringPtr  // Was: string
+    Name StringPtr  // Was: string
 }
 
 // Step 4: Change copy method
@@ -615,7 +615,7 @@ defer cleanup()
 
 **The Registry is NOT obsolete!** It serves a different use case:
 
-- **CStringPtr + Direct**: Performance-first, explicit memory management
+- **StringPtr + Direct**: Performance-first, explicit memory management
 - **Registry.Copy**: Safety-first, idiomatic Go, automatic memory management
 
 Both have their place. The devices package chose performance because:

@@ -26,7 +26,7 @@ cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)ES → Can you mana
 ```
 Do you have char* fields that need string conversion?
 ├─ YES → Can you manage C memory lifetime explicitly?
-│   ├─ YES → Direct + CStringPtr (29ns, manual cleanup)
+│   ├─ YES → Direct + StringPtr (29ns, manual cleanup)
 │   └─ NO  → Registry.Copy (110-170ns, automatic)
 └─ NO → Direct (0.3ns, primitives only)
 ```
@@ -68,7 +68,7 @@ cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)
 - No validation
 - Silent corruption if layouts mismatch
 
-## DirectCopy + CStringPtr
+## Direct + StringPtr
 
 ### When to Use
 - Struct has char* fields
@@ -80,7 +80,7 @@ cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)
 ```go
 type Device struct {
     ID   uint32
-    Name CStringPtr  // 8-byte pointer wrapper
+    Name StringPtr  // 8-byte pointer wrapper
 }
 
 devices := make([]Device, count)
@@ -170,7 +170,7 @@ Mix of primitives and strings at different levels, automatic recursive handling.
 
 ## Comparison
 
-| Aspect | Direct | Direct + CStringPtr | Registry.Copy |
+| Aspect | Direct | Direct + StringPtr | Registry.Copy |
 |--------|-----------|------------------------|---------------|
 | Speed | 0.3ns | 29ns (with access) | 110-170ns |
 | Strings | No | Yes (lazy) | Yes (eager) |
@@ -187,14 +187,14 @@ If Registry.Copy is a bottleneck:
 
 1. Measure: Confirm it's actually the bottleneck
 2. Assess: Can you manage C memory lifetime?
-3. Change struct: string → CStringPtr
+3. Change struct: string → StringPtr
 4. Change copy: registry.Copy() → Direct()
 5. Add cleanup: Implement cleanup function
 
 ### From Direct to Registry
 If you need validation or automatic memory management:
 
-1. Change struct: CStringPtr → string
+1. Change struct: StringPtr → string
 2. Implement CStringConverter
 3. Register struct with layout
 4. Change copy: Direct() → registry.Copy()
@@ -205,7 +205,7 @@ If you need validation or automatic memory management:
 ### Audio Device Enumeration (Performance-critical)
 ```go
 // Hot path: enumerate 100+ devices frequently
-// Solution: Direct + CStringPtr
+// Solution: Direct + StringPtr
 // Reason: Names rarely accessed (filter by channels first)
 devices := EnumerateDevices()  // 0.3ns per device
 filtered := FilterByChannels(devices, 2)  // No string access

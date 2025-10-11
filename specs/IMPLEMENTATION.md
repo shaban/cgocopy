@@ -68,10 +68,10 @@ Features:
 
 Three approaches available:
 
-### 1. CStringPtr (Recommended for performance)
+### 1. StringPtr (Recommended for performance)
 ```go
 type Device struct {
-    Name CStringPtr  // 8 bytes, lazy conversion
+    Name StringPtr  // 8 bytes, lazy conversion
 }
 // Requires: Explicit C memory management
 // Performance: 29ns total (0.3ns copy + 29ns String())
@@ -188,7 +188,7 @@ The package handles platform differences through:
 
 ## Use Case Selection
 
-### Direct + CStringPtr
+### Direct + StringPtr
 Use when:
 - Performance critical (hot path)
 - Can manage C memory lifetime
