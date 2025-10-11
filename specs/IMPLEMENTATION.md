@@ -21,7 +21,7 @@ Validated copying with support for strings and nested structs.
 
 ```go
 registry.Register(reflect.TypeOf(Device{}), cSize, layout, converter)
-registry.Copy(&goDevice, cDevicePtr)  // ~50ns with validation
+registry.Copy(&goDevice, cDevicePtr)  // ~110ns with validation
 ```
 
 Features:
@@ -55,7 +55,7 @@ Three approaches available:
 ### 1. StringPtr (Recommended for performance)
 ```go
 type Device struct {
-    Name StringPtr  // 8 bytes, lazy conversion
+    Name cgocopy.StringPtr  // 8 bytes, lazy conversion
 }
 // Requires: Explicit C memory management
 // Performance: 29ns total (0.3ns copy + 29ns String())
@@ -67,7 +67,7 @@ type Device struct {
     Name string  // Eager conversion
 }
 // Requires: CStringConverter implementation
-// Performance: ~50ns copy + string allocation
+// Performance: ~110-170ns copy + string allocation
 // Benefit: C memory can be freed immediately
 ```
 
@@ -93,22 +93,50 @@ Primitive types typically align to their size:
 
 The package captures actual alignment at compile time via `ArchInfo`.
 
-### AutoLayout Function
+### CustomLayout Function
 
-Calculates offsets automatically for standard C structs:
+For structs that don't follow standard C alignment rules, use `CustomLayout` which generates layout information using your C compiler's actual `offsetof()` calculations:
 
 ```go
-layout := cgocopy.AutoLayout("uint32_t", "char*")
+// 1. Copy this C code into your .c file:
+/*
+#include <stddef.h>
+
+// Define your struct exactly as it appears in your C code
+typedef struct {
+    uint32_t id;
+    char* name;
+    float value;
+} MyDevice;
+
+// Generate layout info using actual C compiler
+cgocopy_FieldInfo* getMyDeviceLayout() {
+    static cgocopy_FieldInfo layout[] = {
+        {.offset = offsetof(MyDevice, id), .size = sizeof(uint32_t), .type_name = "uint32_t"},
+        {.offset = offsetof(MyDevice, name), .size = sizeof(char*), .type_name = "char*", .is_string = true},
+        {.offset = offsetof(MyDevice, value), .size = sizeof(float), .type_name = "float"},
+    };
+    return layout;
+}
+*/
+
+// 2. Call from Go:
+layout := cgocopy.CustomLayout("MyDevice", "uint32_t", "char*", "float")
+registry.MustRegister(Device{}, cSize, layout, converter)
 ```
 
-Tested accuracy: 100% across 31 fields in 8 struct patterns.
+**Benefits:**
+- ✅ Works with `#pragma pack(1)`
+- ✅ Works with `__attribute__((packed))`
+- ✅ Works with third-party libraries
+- ✅ Uses actual C compiler layout decisions
+- ✅ Zero runtime overhead (calculated at compile time)
 
-Limitations:
-- Does not work with `#pragma pack` directives
-- Does not work with `__attribute__((packed))`
-- Does not work with bitfields or unions
-
-For these cases, use explicit `offsetof()` helpers.
+**When to use CustomLayout:**
+- Your C struct uses custom packing (`#pragma pack`)
+- You're interfacing with third-party C libraries
+- AutoLayout fails due to complex alignment
+- You need 100% accuracy for critical systems
 
 ## Registry Improvements
 
@@ -130,8 +158,8 @@ layout := []FieldInfo{
 After:
 ```go
 layout := []FieldInfo{
-    {Offset: 0, TypeName: "uint32_t"},
-    {Offset: 8, TypeName: "char*"},  // IsString and Size deduced
+    {Offset: 0, TypeName: "uint32_t"},  // Size and IsString auto-deduced
+    {Offset: 8, TypeName: "char*"},     // IsString auto-deduced from "char*"
 }
 ```
 

@@ -80,11 +80,11 @@ cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)
 ```go
 type Device struct {
     ID   uint32
-    Name StringPtr  // 8-byte pointer wrapper
+    Name cgocopy.StringPtr  // 8-byte pointer wrapper
 }
 
 devices := make([]Device, count)
-structcopy.DirectCopyArray(devices, unsafe.Pointer(cDevices), cSize)
+cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)
 
 // Cleanup function required
 cleanup := func() {

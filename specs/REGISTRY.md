@@ -1,6 +1,25 @@
 # Registry API Guide
 
-The Registry provides validated, safe copying between C and Go structs with automatic string conversion and nested struct support. Use it when you need more than just primitive copying.
+The Registry provides validated, safe copying between C and Go structs with automatic string conversion and nested struct support. Use it when yWhen DirectCopy becomes insufficient:
+
+```go
+// Before (Direct - primitives only)
+type Device struct {
+    ID   uint32
+    Size uint32
+}
+Direct(&device, cPtr)
+
+// After (Registry - with strings)
+type Device struct {
+    ID   uint32
+    Name string  // Now supports strings!
+    Size uint32
+}
+layout := cgocopy.AutoLayout("uint32_t", "char*", "uint32_t")
+registry.MustRegister(Device{}, cSize, layout, stringConverter)
+registry.Copy(&device, cPtr)  // Strings converted automatically
+```st primitive copying.
 
 ## Quick Start
 

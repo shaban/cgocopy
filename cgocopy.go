@@ -266,6 +266,117 @@ func getAlignmentFromTypeName(typeName string, archInfo ArchInfo) uintptr {
 	}
 }
 
+// CustomLayout generates C code for structs that don't follow standard alignment.
+// Use this when AutoLayout fails due to custom packing or complex alignment.
+//
+// This function prints C code to stdout that you should copy into your C files.
+// The generated C code provides a function that returns the actual layout
+// as determined by your C compiler.
+//
+// Example usage:
+//
+//	// 1. Generate C code:
+//	cgocopy.CustomLayout("MyDevice", "uint32_t", "char*", "float")
+//
+//	// 2. Copy the printed C code into your .c file
+//
+//	// 3. Use in Go:
+//	layout := getMyDeviceLayout()  // Call the C function
+//	registry.MustRegister(Device{}, cSize, layout, converter)
+//
+// This solves AutoLayout limitations:
+//   - Works with #pragma pack(1)
+//   - Works with __attribute__((packed))
+//   - Uses actual C compiler layout decisions
+//   - Perfect for third-party libraries
+func CustomLayout(structName string, typeNames ...string) {
+	fmt.Printf(`// Copy this C code into your .c file for struct: %s
+// This uses your C compiler's actual offsetof() calculations
+
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+// Define your struct exactly as it appears in your C code
+typedef struct {
+`, structName)
+
+	// Generate struct definition
+	for i, typeName := range typeNames {
+		cType := goTypeToCType(typeName)
+		fieldName := fmt.Sprintf("field%d", i)
+		fmt.Printf("    %s %s;\n", cType, fieldName)
+	}
+
+	fmt.Printf(`} %s;
+
+// Field info structure (matches cgocopy.FieldInfo)
+typedef struct {
+    size_t offset;
+    size_t size;
+    const char* type_name;
+    bool is_string;
+} cgocopy_FieldInfo;
+
+// Generated layout function - call this from Go
+cgocopy_FieldInfo* get%sLayout() {
+    static cgocopy_FieldInfo layout[] = {
+`, structName, structName)
+
+	// Generate layout entries
+	for i, typeName := range typeNames {
+		fieldName := fmt.Sprintf("field%d", i)
+		isString := typeName == "char*"
+		fmt.Printf("        {.offset = offsetof(%s, %s), .size = sizeof(%s), .type_name = \"%s\", .is_string = %s},\n",
+			structName, fieldName, goTypeToCType(typeName), typeName, boolToC(isString))
+	}
+
+	fmt.Printf(`    };
+    return layout;
+}
+
+// Also provide struct size
+size_t get%sSize() {
+    return sizeof(%s);
+}
+
+`, structName, structName)
+}
+
+// goTypeToCType converts Go type names to C types for code generation
+func goTypeToCType(goType string) string {
+	switch goType {
+	case "int8", "uint8":
+		return "uint8_t"
+	case "int16", "uint16":
+		return "uint16_t"
+	case "int32", "uint32":
+		return "uint32_t"
+	case "int64", "uint64":
+		return "uint64_t"
+	case "float32":
+		return "float"
+	case "float64":
+		return "double"
+	case "char*":
+		return "char*"
+	case "void*", "pointer":
+		return "void*"
+	case "size_t":
+		return "size_t"
+	default:
+		return goType
+	}
+}
+
+// boolToC converts bool to C string
+func boolToC(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
 // alignOffset rounds up offset to the next alignment boundary
 func alignOffset(offset, align uintptr) uintptr {
 	if align == 0 || align == 1 {

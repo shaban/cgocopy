@@ -16,7 +16,8 @@ Do you have char* pointers?
 ```go
 type Device struct {
     ID   uint32
-    Name StringPtr  // Just the pointer (8 bytes)
+    Name cgocopy.StringPtr  // Just the pointer (8 bytes)
+}
     Size uint32
 }
 
@@ -60,7 +61,7 @@ type Device struct {
 // Register with string converter
 layout := []cgocopy.FieldInfo{
     {Offset: 0, Size: 4, TypeName: "uint32_t"},
-    {Offset: 8, Size: 8, TypeName: "char*", IsString: true},  // Mark as string
+    {Offset: 8, Size: 8, TypeName: "char*"},  // IsString auto-deduced
     {Offset: 16, Size: 4, TypeName: "uint32_t"},
 }
 
@@ -141,7 +142,7 @@ if err := registry.Copy(&s, cPtr); err != nil {
 - ✅ Catches layout mismatches before silent corruption
 - ✅ No need to verify #pragma pack(1) or alignment
 
-**Performance:** ~50ns per struct (still fast, includes validation)
+**Performance:** ~110-170ns per struct (includes validation)
 
 ---
 

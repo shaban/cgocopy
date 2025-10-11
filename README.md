@@ -147,6 +147,12 @@ func (r *Registry) Register(goType reflect.Type, cSize uintptr,
 func (r *Registry) Copy(dst interface{}, cPtr unsafe.Pointer) error
 
 func AutoLayout(typeNames ...string) []FieldInfo
+
+Automatically calculates offsets and sizes from C type names. Works for standard C structs.
+
+func CustomLayout(structName string, typeNames ...string)
+
+Generates C code for structs that don't follow standard alignment rules. Use when AutoLayout fails.
 ```
 
 Validated copying with string conversion and nested struct support.

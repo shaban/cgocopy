@@ -32,7 +32,7 @@ import "unsafe"
 //	cgocopy.Direct(&device, unsafe.Pointer(cDevice))  // 0.31ns
 //
 //	// String conversion only happens when called
-//	fmt.Println(device.Name.String())  // ~50ns
+//	fmt.Println(device.Name.String())  // ~29ns
 type StringPtr struct {
 	ptr unsafe.Pointer // Points to C char*
 }

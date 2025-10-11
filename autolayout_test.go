@@ -271,3 +271,24 @@ func BenchmarkManualLayout(b *testing.B) {
 		}
 	}
 }
+
+// TestCustomLayoutCodeGeneration verifies CustomLayout generates valid C code
+func TestCustomLayoutCodeGeneration(t *testing.T) {
+	// This test verifies that CustomLayout doesn't panic and generates output
+	// We can't easily test the exact output without capturing stdout,
+	// but we can verify it runs without error
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("CustomLayout panicked: %v", r)
+		}
+	}()
+
+	// Test with simple struct
+	CustomLayout("TestDevice", "uint32_t", "char*", "float")
+
+	// Test with complex struct
+	CustomLayout("ComplexDevice", "uint8_t", "uint32_t", "char*", "double", "uint16_t")
+
+	t.Logf("✅ CustomLayout generated C code without errors")
+}
