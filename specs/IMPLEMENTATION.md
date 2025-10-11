@@ -1,28 +1,5 @@
 # Implementation Specifications
 
-## | Op## Performance Characteristics
-
-**⚠️ Performance Caveats:**
-- All benchmarks measured on: **macOS (Darwin), ARM64 architecture, Apple Silicon**
-- Performance may vary significantly on different platforms, compilers, and hardware
-- String conversion times depend on string length and memory allocation patterns
-- Registry validation overhead occurs once at registration time, not per copy
-- Direct operations are compiler-inlined and may vary with optimization levels
-
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Direct | 0.3ns | Compiler-inlined |
-| DirectArray (per element) | 0.3ns | Inlined loop |
-| Registry.Copy (primitives only) | ~110ns | Includes validation |
-| Registry.Copy (with strings) | ~170ns | Includes string allocation |
-| String conversion | ~20-85ns | Scales ~0.7ns per character | Time | Notes |
-|-----------|------|-------|
-| Direct | 0.3ns | Compiler-inlined |
-| DirectArray (per element) | 0.3ns | Inlined loop |
-| Registry.Copy (primitives only) | ~110ns | Includes validation |
-| Registry.Copy (with strings) | ~170ns | Includes string allocation |
-| String conversion | ~20-85ns | Scales ~0.7ns per character |cture
-
 The cgocopy package provides type-safe copying between C and Go structs through two approaches:
 
 ### Direct
@@ -55,12 +32,19 @@ Features:
 
 ## Performance Characteristics
 
+**⚠️ Performance Caveats:**
+- All benchmarks measured on: **macOS (Darwin), ARM64 architecture, Apple Silicon**
+- Performance may vary significantly on different platforms, compilers, and hardware
+- String conversion times depend on string length and memory allocation patterns
+- Registry validation overhead occurs once at registration time, not per copy
+- Direct operations are compiler-inlined and may vary with optimization levels
+
 | Operation | Time | Notes |
 |-----------|------|-------|
 | Direct | 0.3ns | Compiler-inlined |
 | DirectArray (per element) | 0.3ns | Inlined loop |
-| Registry.Copy (primitives only) | ~50ns | Includes validation |
-| Registry.Copy (with strings) | ~50-100ns | Depends on string length |
+| Registry.Copy (primitives only) | ~110ns | Includes validation |
+| Registry.Copy (with strings) | ~170ns | Includes string allocation |
 | String conversion | ~20-85ns | Scales ~0.7ns per character |
 | Nested structs (5 levels) | ~640ns | Recursive field-by-field |
 
