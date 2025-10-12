@@ -4,7 +4,8 @@ Package cgocopy2 provides improved type-safe copying between C and Go structures
 
 ## Status
 
-✅ **Phase 1 Complete** - Basic types and error handling implemented and tested.
+✅ **Phase 1-6 Complete** - Core functionality implemented and tested (93 tests, 100% pass rate).  
+🚧 **Phase 7-8 Next** - C macro integration and migration planning.
 
 ## Features (Planned)
 
@@ -129,24 +130,54 @@ BenchmarkFastCopyInt32_NonGeneric    1B ops    0.3 ns/op    0 B/op    0 allocs
 - Performance benchmarks vs Copy
 - All 76 tests passing ✅
 
+### Phase 6: Validation ✅
+
+#### Validation (`validation.go`)
+- `ValidateStruct[T any]() error`: Check if type is properly registered
+- `validateMetadata()`: Check metadata completeness
+- `validateField()`: Validate individual field (including recursive nested checks)
+- `validateNestedStructs()`: Ensure all nested types are registered
+- `ValidateAll() []error`: Validate all registered types at once
+- `MustValidateStruct[T]()`: Panic-on-error variant
+- `GetRegisteredTypes() []string`: List all registered type names
+
+#### Features
+- Registration verification before use
+- Nested struct registration validation
+- Array/slice/pointer element type checks
+- Detailed error messages with field names and types
+- Helps catch registration issues at initialization time
+- Useful for debugging complex struct hierarchies
+
+#### Tests
+- `validation_test.go`: 17 comprehensive test cases
+- Valid struct validation
+- Unregistered type detection
+- Nested struct validation (single and multiple levels)
+- Array/slice element type validation
+- Pointer target type validation
+- Complex nested scenarios
+- ValidateAll() for batch validation
+- MustValidateStruct() panic behavior
+- GetRegisteredTypes() introspection
+- All 93 tests passing ✅
+
 ## Next Steps
 
-### Phase 2: Registry & Precompile
-- Implement `Precompile[T any]()` function
-- C metadata integration
-- Type validation
+### Phase 7: C Macro Implementation (Optional)
+- Create `native2/cgocopy_metadata.h`
+- Simplified `CGOCOPY_STRUCT` and `CGOCOPY_FIELD` macros
+- C11 `_Generic` for auto-detection
+- Integration tests with real C code
 
-### Phase 3: Mapping with Tags
-- Struct tag parsing (`cgocopy:"field_name"`)
-- Field mapping logic
-- Nested struct support
+**Note**: Current Go-only implementation is fully functional. C macros are optional for integration with existing C projects.
 
-### Phase 4: Copy Implementation
-- Generic `Copy[T any]()` function
-- C integration for actual copying
-- Field-by-field copying logic
+### Phase 8: Integration & Migration
+- Comprehensive integration tests
+- Performance benchmarks vs v1
+- Migration guide and examples
+- Documentation updates
 
-### Phase 5-8
 See `docs/migration/IMPLEMENTATION_PLAN.md` for complete roadmap.
 
 ## Testing
@@ -167,18 +198,20 @@ go test -v -run TestRegistry ./pkg/cgocopy2/
 ```
 pkg/cgocopy2/
 ├── types.go          # Core type definitions ✅
-├── types_test.go     # Type system tests ✅
+├── types_test.go     # Type system tests (17) ✅
 ├── errors.go         # Error types ✅
-├── errors_test.go    # Error tests ✅
-├── registry.go       # [Phase 2] Precompile implementation
-├── registry_test.go  # [Phase 2] Registry tests
-├── mapping.go        # [Phase 3] Field mapping with tags
-├── mapping_test.go   # [Phase 3] Mapping tests
-├── copy.go           # [Phase 4] Copy implementation
-├── copy_test.go      # [Phase 4] Copy tests
-├── fastcopy.go       # [Phase 5] FastCopy optimization
-├── validation.go     # [Phase 6] ValidateStruct helper
+├── errors_test.go    # Error tests (10) ✅
+├── registry.go       # Precompile & registry ✅
+├── registry_test.go  # Registry tests (17) ✅
+├── copy.go           # Copy implementation ✅
+├── copy_test.go      # Copy tests (12) ✅
+├── fastcopy.go       # FastCopy optimization ✅
+├── fastcopy_test.go  # FastCopy tests (20) ✅
+├── validation.go     # Validation helpers ✅
+├── validation_test.go # Validation tests (17) ✅
 └── README.md         # This file
+
+Total: 93 tests, 100% pass rate
 ```
 
 ## Documentation

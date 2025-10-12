@@ -97,18 +97,40 @@ This document tracks the status of the cgocopy v2 implementation based on the 8-
 
 **Test Results**: 76 tests total (56 + 20), 100% pass rate
 
-### Phase 6: Validation & Error Handling � NEXT
-**Status**: Ready to Start  
+### Phase 6: Validation & Error Handling ✅ COMPLETE
+**Status**: Complete  
 **Target**: ValidateStruct helper and comprehensive error reporting
 
-**Tasks**:
-- [ ] Implement `ValidateStruct[T any]() error` function
-- [ ] Check for common issues (unregistered, unsupported fields)
-- [ ] Validation tests
+**Completed Tasks**:
+- ✅ Implement `ValidateStruct[T any]() error` function
+- ✅ `validateMetadata()` for metadata completeness checks
+- ✅ `validateField()` for individual field validation
+- ✅ `validateNestedStructs()` to ensure nested types are registered
+- ✅ `ValidateAll()` to validate all registered types at once
+- ✅ `MustValidateStruct[T]()` panic-on-error variant
+- ✅ `GetRegisteredTypes()` for introspection
+- ✅ 17 comprehensive validation test cases
 
-### Phase 7: C Macro Implementation 📋 PLANNED
-**Status**: Not Started  
+**Features**:
+- Checks if types are registered before use
+- Validates nested struct registration
+- Verifies array/slice/pointer element types
+- Detailed error messages with field names and types
+- Helps catch registration issues at init time
+
+**Test Results**: 93 tests total (76 + 17), 100% pass rate
+
+### Phase 7: C Macro Implementation � NEXT
+**Status**: Ready to Start (Optional - can be deferred)  
 **Target**: Create `native2/cgocopy_metadata.h` with simplified macros
+
+**Note**: This phase requires actual C code integration. Current Go-only implementation is fully functional without C macros. This can be implemented when integrating with real C projects.
+
+**Tasks**:
+- [ ] Create `native2/` directory
+- [ ] Implement simplified `CGOCOPY_STRUCT` and `CGOCOPY_FIELD` macros
+- [ ] Use C11 `_Generic` for auto-detection
+- [ ] Integration tests with actual C code
 
 ### Phase 8: Integration & Migration 📋 PLANNED
 **Status**: Not Started  
