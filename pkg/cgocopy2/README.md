@@ -2,19 +2,24 @@
 
 Package cgocopy2 provides improved type-safe copying between C and Go structures with simplified macros, thread-safe registry, and struct tag support.
 
+## Requirements
+
+- **Go**: 1.18+ (for generics support)
+- **C**: C11 or later (for `_Generic` support in macros) - **required for C macro usage**
+
 ## Status
 
-✅ **Phase 1-6 Complete** - Core functionality implemented and tested (93 tests, 100% pass rate).  
-🚧 **Phase 7-8 Next** - C macro integration and migration planning.
+✅ **Phase 1-7 Complete** - Core functionality and C11 macros implemented (93 Go tests, 100% pass rate).  
+🚧 **Phase 8 Next** - Integration tests and migration guide.
 
-## Features (Planned)
+## Features
 
-- **Simplified C Macros**: Use `CGOCOPY_STRUCT(type, ...)` with `_Generic` auto-detection
-- **Thread-Safe Registry**: `sync.RWMutex` for concurrent type registration
-- **Precompilation**: Explicit `Precompile[T any]()` for type registration at init time
-- **Tagged Structs**: Support for `cgocopy:"field_name"` and `cgocopy:"-"` tags
-- **FastCopy**: Zero-allocation copying for primitive types
-- **Validation**: `ValidateStruct[T any]()` helper for debugging
+- **Simplified C11 Macros**: Use `CGOCOPY_STRUCT` and `CGOCOPY_FIELD` with `_Generic` auto-detection ✅
+- **Thread-Safe Registry**: `sync.RWMutex` for concurrent type registration ✅
+- **Precompilation**: Explicit `Precompile[T any]()` for type registration at init time ✅
+- **Tagged Structs**: Support for `cgocopy:"field_name"` and `cgocopy:"-"` tags ✅
+- **FastCopy**: Zero-allocation copying for primitive types ✅
+- **Validation**: `ValidateStruct[T any]()` helper for debugging ✅
 
 ## Current Implementation
 
@@ -162,21 +167,61 @@ BenchmarkFastCopyInt32_NonGeneric    1B ops    0.3 ns/op    0 B/op    0 allocs
 - GetRegisteredTypes() introspection
 - All 93 tests passing ✅
 
+### Phase 7: C Macros ✅
+
+#### C11 Macros (`native2/cgocopy_macros.h`)
+**⚠️ Requires C11 or later compiler**
+
+Simplified macros using C11 `_Generic` for automatic type detection:
+
+```c
+#include "native2/cgocopy_macros.h"
+
+typedef struct {
+    int id;
+    char* name;
+    double score;
+} Person;
+
+// Automatic type detection - no manual type strings!
+CGOCOPY_STRUCT(Person,
+    CGOCOPY_FIELD(Person, id),      // → int32
+    CGOCOPY_FIELD(Person, name),    // → string
+    CGOCOPY_FIELD(Person, score)    // → float64
+)
+```
+
+For arrays, use `CGOCOPY_ARRAY_FIELD`:
+
+```c
+typedef struct {
+    int values[10];
+} Data;
+
+CGOCOPY_STRUCT(Data,
+    CGOCOPY_ARRAY_FIELD(Data, values, int)  // Specify element type
+)
+```
+
+**Features**:
+- Automatic type detection via `_Generic`
+- Compile-time type safety
+- No manual offset calculations
+- Supports all primitive types, strings, pointers, structs, arrays
+
+**Supported Types**: bool, int8-64, uint8-64, float32/64, strings (char*), pointers, structs, arrays
+
+See `native2/README.md` for complete documentation and `native2/example.c` for usage examples.
+
+**Testing**: Run `native2/test_macros.sh` to verify C11 macro compilation.
+
 ## Next Steps
 
-### Phase 7: C Macro Implementation (Optional)
-- Create `native2/cgocopy_metadata.h`
-- Simplified `CGOCOPY_STRUCT` and `CGOCOPY_FIELD` macros
-- C11 `_Generic` for auto-detection
-- Integration tests with real C code
-
-**Note**: Current Go-only implementation is fully functional. C macros are optional for integration with existing C projects.
-
 ### Phase 8: Integration & Migration
-- Comprehensive integration tests
+- Create comprehensive cgo integration tests
 - Performance benchmarks vs v1
-- Migration guide and examples
-- Documentation updates
+- Migration guide with real-world examples
+- Update main project documentation
 
 See `docs/migration/IMPLEMENTATION_PLAN.md` for complete roadmap.
 
@@ -197,21 +242,26 @@ go test -v -run TestRegistry ./pkg/cgocopy2/
 
 ```
 pkg/cgocopy2/
-├── types.go          # Core type definitions ✅
-├── types_test.go     # Type system tests (17) ✅
-├── errors.go         # Error types ✅
-├── errors_test.go    # Error tests (10) ✅
-├── registry.go       # Precompile & registry ✅
-├── registry_test.go  # Registry tests (17) ✅
-├── copy.go           # Copy implementation ✅
-├── copy_test.go      # Copy tests (12) ✅
-├── fastcopy.go       # FastCopy optimization ✅
-├── fastcopy_test.go  # FastCopy tests (20) ✅
-├── validation.go     # Validation helpers ✅
+├── types.go           # Core type definitions ✅
+├── types_test.go      # Type system tests (17) ✅
+├── errors.go          # Error types ✅
+├── errors_test.go     # Error tests (10) ✅
+├── registry.go        # Precompile & registry ✅
+├── registry_test.go   # Registry tests (17) ✅
+├── copy.go            # Copy implementation ✅
+├── copy_test.go       # Copy tests (12) ✅
+├── fastcopy.go        # FastCopy optimization ✅
+├── fastcopy_test.go   # FastCopy tests (20) ✅
+├── validation.go      # Validation helpers ✅
 ├── validation_test.go # Validation tests (17) ✅
-└── README.md         # This file
+├── native2/
+│   ├── cgocopy_macros.h # C11 macros ✅
+│   ├── example.c        # Usage examples ✅
+│   ├── test_macros.sh   # Test script ✅
+│   └── README.md        # C macro docs ✅
+└── README.md          # This file
 
-Total: 93 tests, 100% pass rate
+Total: 93 Go tests (100% pass), C11 macros tested
 ```
 
 ## Documentation
