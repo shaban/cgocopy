@@ -91,6 +91,44 @@ Package cgocopy2 provides improved type-safe copying between C and Go structures
 - Error cases (nil pointer, unregistered types)
 - All 56 tests passing ✅
 
+### Phase 5: FastCopy ✅
+
+#### FastCopy (`fastcopy.go`)
+- `FastCopy[T any](cPtr unsafe.Pointer) T`: Zero-allocation generic primitive copying
+- Type-specific functions for direct access:
+  - `FastCopyInt`, `FastCopyInt8`, `FastCopyInt16`, `FastCopyInt32`, `FastCopyInt64`
+  - `FastCopyUint`, `FastCopyUint8`, `FastCopyUint16`, `FastCopyUint32`, `FastCopyUint64`
+  - `FastCopyFloat32`, `FastCopyFloat64`
+  - `FastCopyBool`
+- `CanFastCopy[T]()`: Check if type can use FastCopy
+- `MustFastCopy[T]()`: Panic-on-non-primitive variant
+
+#### Features
+- **Zero allocations**: Direct memory access without heap allocation
+- **15x faster** than Copy for primitives (3.5ns vs 52ns)
+- **No reflection overhead**: Compile-time type checking
+- Panic protection for non-primitive types
+- Works with all Go primitive types
+
+#### Performance
+```
+BenchmarkFastCopy_Int32      332M ops    3.5 ns/op    0 B/op    0 allocs
+BenchmarkCopy_Int32           22M ops   52.0 ns/op    8 B/op    2 allocs
+
+BenchmarkFastCopy_Float64    421M ops    2.8 ns/op    0 B/op    0 allocs
+BenchmarkCopy_Float64         25M ops   48.1 ns/op   16 B/op    2 allocs
+
+BenchmarkFastCopyInt32_NonGeneric    1B ops    0.3 ns/op    0 B/op    0 allocs
+```
+
+#### Tests
+- `fastcopy_test.go`: 20 test cases + 9 benchmarks
+- All 13 primitive type variants tested
+- Panic test for non-primitive types
+- CanFastCopy validation tests
+- Performance benchmarks vs Copy
+- All 76 tests passing ✅
+
 ## Next Steps
 
 ### Phase 2: Registry & Precompile

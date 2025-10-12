@@ -253,19 +253,19 @@ func TestCopy_AllPrimitiveTypes(t *testing.T) {
 	defer Reset()
 
 	type AllPrimitives struct {
-		I    int
-		I8   int8
-		I16  int16
-		I32  int32
-		I64  int64
-		U    uint
-		U8   uint8
-		U16  uint16
-		U32  uint32
-		U64  uint64
-		F32  float32
-		F64  float64
-		B    bool
+		I   int
+		I8  int8
+		I16 int16
+		I32 int32
+		I64 int64
+		U   uint
+		U8  uint8
+		U16 uint16
+		U32 uint32
+		U64 uint64
+		F32 float32
+		F64 float64
+		B   bool
 	}
 
 	if err := Precompile[AllPrimitives](); err != nil {
@@ -341,9 +341,9 @@ func TestCopy_TaggedStruct(t *testing.T) {
 
 func TestCopyPrimitive(t *testing.T) {
 	tests := []struct {
-		name     string
-		setup    func() (reflect.Value, unsafe.Pointer, reflect.Type)
-		check    func(t *testing.T, result reflect.Value)
+		name  string
+		setup func() (reflect.Value, unsafe.Pointer, reflect.Type)
+		check func(t *testing.T, result reflect.Value)
 	}{
 		{
 			name: "int",
@@ -419,7 +419,7 @@ func TestCopyPrimitive(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resultValue, ptr, typ := tt.setup()
-			
+
 			err := copyPrimitive(resultValue, ptr, typ)
 			if err != nil {
 				t.Fatalf("copyPrimitive() error = %v", err)
