@@ -1,7 +1,7 @@
 package cgocopy
 
 /*
-#include "native/cgocopy_metadata.h"
+#include "../../native/cgocopy_metadata.h"
 */
 import "C"
 

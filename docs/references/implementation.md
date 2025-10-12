@@ -50,35 +50,34 @@ Features:
 
 ## String Handling
 
-Three approaches available:
+Two primary strategies remain after removing `StringPtr`:
 
-### 1. StringPtr (Recommended for performance)
+### 1. Registry with UTF8Converter (Recommended default)
 ```go
 type Device struct {
-    Name cgocopy.StringPtr  // 8 bytes, lazy conversion
+    Name string
 }
-// Requires: Explicit C memory management
-// Performance: 29ns total (0.3ns copy + 29ns String())
+
+registry.MustRegister(Device{}, cSize, layout, cgocopy.DefaultCStringConverter)
 ```
 
-### 2. Registry with Converter (Recommended for safety)
-```go
-type Device struct {
-    Name string  // Eager conversion
-}
-// Requires: CStringConverter implementation
-// Performance: ~110-170ns copy + string allocation
-// Benefit: C memory can be freed immediately
-```
+- Strings are copied eagerly into Go memory.
+- `UTF8Converter` avoids cgo helpers while keeping ownership clear.
+- C memory can be freed the moment `Copy` returns.
+- Performance: ~110–170ns per struct depending on string count/length.
 
-### 3. Direct (Primitives only)
+### 2. Direct (Primitives only)
 ```go
 type Device struct {
     ID uint32
     // No string fields
 }
-// Performance: 0.3ns
 ```
+
+- Fast path (~0.3ns) for pure primitive layouts.
+- Any pointers copied remain owned by C – keep the backing memory alive yourself.
+
+Custom `CStringConverter` implementations are still supported for non-UTF8 encodings or advanced scenarios (lazy conversion, arena allocators, etc.).
 
 ## Alignment and Padding
 
@@ -200,19 +199,18 @@ The package handles platform differences through:
 
 ## Use Case Selection
 
-### Direct + StringPtr
+### Direct
 Use when:
-- Performance critical (hot path)
-- Can manage C memory lifetime
-- Strings accessed rarely
+- Hot paths require the absolute minimum overhead
+- Struct contains only primitives or fixed-size arrays
+- No automatic memory management is needed
 
-### Registry.Copy
+### Registry.Copy + UTF8Converter
 Use when:
-- Want automatic memory management
-- Need validation
-- Working with third-party C libraries
-- Platform portability required
-- Complex or unpredictable struct layouts
+- Need automatic string conversion or nested metadata validation
+- Working with third-party C libraries where layouts may drift
+- Platform portability/defensive checks are desired
+- Offloading memory ownership to Go matters
 
 ## Test Coverage
 

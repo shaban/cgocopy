@@ -1,112 +1,109 @@
 # cgocopy
 
-Fast and safe C to Go struct copying.
+Fast and safe C → Go struct copying with zero fuss.
 
 ## Installation
 
-```bash
 go get github.com/shaban/cgocopy
-```
 
 ## Quick Start
 
-### Simple Structs (Primitives Only)
+### Direct copy (primitives only)
 
 ```go
-import "github.com/shaban/cgocopy"
-
 // C struct
 typedef struct {
     uint32_t id;
     float value;
 } Sensor;
 
-// Go struct (identical layout)
+// Matching Go struct
 type Sensor struct {
     ID    uint32
     Value float32
 }
 
-// Copy (0.3ns, compiler-inlined)
-var sensor Sensor
-cgocopy.Direct(&sensor, unsafe.Pointer(cSensor))
+var s Sensor
+cgocopy.Direct(&s, unsafe.Pointer(cSensor))
 ```
 
-### Arrays
+### Registry copy (strings & nested fields)
 
 ```go
-sensors := make([]Sensor, count)
-cSize := unsafe.Sizeof(C.Sensor{})
-cgocopy.DirectArray(sensors, unsafe.Pointer(cSensors), cSize)
-```
+type CDevice struct {
+    uint32_t id;
+    char*    name;
+    uint32_t channels;
+};
 
-### With Strings
-
-Two approaches available:
-
-#### 1. StringPtr (Fast, Manual Memory)
-
-```go
 type Device struct {
-    ID   uint32
-    Name cgocopy.StringPtr  // 8-byte pointer
+    ID       uint32
+    Name     string
+    Channels uint32
 }
 
-// Copy structs (0.3ns each)
-devices := make([]Device, count)
-cgocopy.DirectArray(devices, unsafe.Pointer(cDevices), cSize)
-
-// Must keep C memory alive
-cleanup := func() { C.freeDevices(cDevices) }
-defer cleanup()
-
-// Lazy string access (29ns when called)
-name := devices[0].Name.String()
-```
-
-#### 2. Registry (Safe, Automatic Memory)
-
-```go
-type Device struct {
-    ID   uint32
-    Name string  // Real Go string
-}
-
-// Register once (at init) - streamlined!
 registry := cgocopy.NewRegistry()
-layout := cgocopy.AutoLayout("uint32_t", "char*")  // Auto-deduces sizes & IsString
-registry.MustRegister(Device{}, cSize, layout, converter)
+layout := []cgocopy.FieldInfo{
+    {Offset: unsafe.Offsetof(CDevice{}.id), TypeName: "uint32_t"},
+    {Offset: unsafe.Offsetof(CDevice{}.name), TypeName: "char*"},
+    {Offset: unsafe.Offsetof(CDevice{}.channels), TypeName: "uint32_t"},
+}
 
-// Use many times
-var device Device
-registry.Copy(&device, unsafe.Pointer(cDevice))
-C.freeDevice(cDevice)  // ✅ C memory can be freed immediately
+registry.MustRegister(Device{}, unsafe.Sizeof(CDevice{}), layout, cgocopy.DefaultCStringConverter)
+
+var out Device
+if err := registry.Copy(&out, unsafe.Pointer(cDevice)); err != nil {
+    panic(err)
+}
+
+C.freeDevice(cDevice) // safe immediately – strings already copied
 ```
 
-## Performance
+## Performance snapshot
 
-| Method | Time | Use Case |
-|--------|------|----------|
-| Direct | 0.3ns | Primitives only |
-| Direct + StringPtr | 29ns/string | Lazy string access |
-| Direct + 3 strings | ~65ns | Manual string conversion |
-| Registry.Copy | ~110ns primitives, ~170ns with strings | Automatic strings, validation |
+Benchmarks collected with `go test -benchmem` on Apple M1 Pro, macOS 26.0.1 (25A362), Go 1.25.2 `darwin/arm64`. Expect variation on other hardware, OS versions, and Go releases.
 
-**⚠️ Performance Notes:**
-- Benchmarks measured on: **macOS (Darwin), ARM64 architecture, Apple Silicon**
-- Performance may vary significantly across platforms, compilers, and hardware configurations
-- String conversion times depend on string length and memory allocation patterns
-- Registry validation overhead occurs once at registration time, not per copy operation
+### Initialization cost
+
+| Benchmark | Time (ns/op) | Allocations | Notes |
+|-----------|--------------|-------------|-------|
+| `BenchmarkAutoLayout` | 144.8 | 384 B / 1 alloc | Registry metadata validation + converter lookup |
+| `BenchmarkManualLayout` | 0.314 | 0 | Inline unsafe copy when layout already known |
+
+### Copy throughput
+
+| Benchmark | Time (ns/op) | Throughput | Allocations |
+|-----------|--------------|------------|-------------|
+| `BenchmarkMemCopyPureGo` | 389.2 | 84.2 GB/s | 0 |
+| `BenchmarkMemCopyCgo` | 958.5 | 34.2 GB/s | 0 |
+| `BenchmarkDirectCopy*` (inline/generic/manual) | 0.31–0.36 | — | 0 |
+| `BenchmarkRegistryCopyLargeSensorBlock` | 1,407 | — | 0 |
+
+### Nested struct handling
+
+| Benchmark | Time (ns/op) | Allocations | Notes |
+|-----------|--------------|-------------|-------|
+| `BenchmarkNestedStructCopy` | 167.7 | 0 | Registry copy of nested primitives |
+| `BenchmarkDeepNesting5Levels` | 239.8 | 0 | Five-level tree of nested arrays |
+
+### String conversion
+
+| Benchmark | Time (ns/op) | Allocations | Notes |
+|-----------|--------------|-------------|-------|
+| `BenchmarkUTF8Converter` | 36.6 | 24 B / 2 alloc | Pure-Go UTF-8 copy via `UTF8Converter` |
+| `BenchmarkCStringConversion` | 19.2 | 80 B / 1 alloc | Baseline CGO conversion for comparison |
+| `BenchmarkCStringByLength/short` | 12.0 | 5 B / 1 alloc | Direct copy of 5 characters |
+| `BenchmarkCStringByLength/medium` | 14.7 | 32 B / 1 alloc | Direct copy of 30 characters |
+| `BenchmarkCStringByLength/long` | 45.0 | 288 B / 1 alloc | Direct copy of 200 characters |
 
 ## Documentation
 
-- [STRINGPTR.md](STRINGPTR.md) - StringPtr detailed guide
-- [specs/USAGE_GUIDE.md](specs/USAGE_GUIDE.md) - When to use which approach
-- [specs/IMPLEMENTATION.md](specs/IMPLEMENTATION.md) - Technical details
-- [specs/REGISTRY.md](specs/REGISTRY.md) - Registry API guide
-- [specs/WHEN_TO_USE_REGISTRY.md](specs/WHEN_TO_USE_REGISTRY.md) - Registry detailed guide
+- [docs/guides/usage_guide.md](docs/guides/usage_guide.md) – choosing between Direct and Registry
+- [docs/references/registry.md](docs/references/registry.md) – Registry internals and metadata helpers
+- [docs/references/implementation.md](docs/references/implementation.md) – deep dive into validation & copying
+- [docs/guides/when_to_use_registry.md](docs/guides/when_to_use_registry.md) – real-world scenarios
 
-## API Reference
+## API overview
 
 ### Direct
 
@@ -114,7 +111,7 @@ C.freeDevice(cDevice)  // ✅ C memory can be freed immediately
 func Direct[T any](dst *T, src unsafe.Pointer)
 ```
 
-Zero-overhead copy. Compiler-inlined. Use for primitives and fixed-size arrays only.
+Compiler-inlined byte copy – ideal for structs containing only primitives or fixed-size arrays.
 
 ### DirectArray
 
@@ -122,71 +119,49 @@ Zero-overhead copy. Compiler-inlined. Use for primitives and fixed-size arrays o
 func DirectArray[T any](dst []T, src unsafe.Pointer, cElemSize uintptr)
 ```
 
-Efficient array copying. Fully inlined.
-
-### StringPtr
-
-```go
-type StringPtr uintptr
-
-func (p StringPtr) String() string
-func (p StringPtr) IsNil() bool
-```
-
-Lazy char* wrapper. Requires C memory to stay alive.
+Copies entire C arrays into Go slices with a single call.
 
 ### Registry
 
 ```go
-type Registry struct { ... }
+type Registry struct { /* ... */ }
 
 func NewRegistry() *Registry
-func (r *Registry) Register(goType reflect.Type, cSize uintptr, 
-                            layout []FieldInfo, 
-                            converter ...CStringConverter) error
-func (r *Registry) Copy(dst interface{}, cPtr unsafe.Pointer) error
-
-func AutoLayout(typeNames ...string) []FieldInfo
-
-Automatically calculates offsets and sizes from C type names. Works for standard C structs.
-
-func CustomLayout(structName string, typeNames ...string)
-
-Generates C code for structs that don't follow standard alignment rules. Use when AutoLayout fails.
+func (r *Registry) Register(goType reflect.Type, cSize uintptr, layout []FieldInfo, converter ...CStringConverter) error
+func (r *Registry) Copy(dst any, cPtr unsafe.Pointer) error
+func (r *Registry) MustRegister(goStruct any, cSize uintptr, layout []FieldInfo, converter ...CStringConverter)
 ```
 
-Validated copying with string conversion and nested struct support.
+Validates layouts, handles nested structs/arrays, and performs optional string conversion.
 
-## Memory Safety
+### UTF8Converter
 
-### Direct + StringPtr
-- Requires explicit memory management
-- Must keep C memory alive during string access
-- Use cleanup functions
+```go
+type UTF8Converter struct{}
 
-### Registry.Copy
-- Automatic memory management
-- Copies strings immediately
-- C memory can be freed after Copy()
+func (UTF8Converter) CStringToGo(ptr unsafe.Pointer) string
+
+var DefaultCStringConverter UTF8Converter
+```
+
+Zero-Cgo string conversion. Pass `DefaultCStringConverter` (or your own implementation) when registering structs with `char*` fields.
+
+## Memory model
+
+- **Direct**: No allocations, but you own the lifetime of any pointers copied into Go structs.
+- **Registry**: Performs deep copies of supported types (including strings). The C memory can be freed immediately after `Copy` returns.
 
 ## Examples
 
-See test files for complete examples:
-- Basic struct copying
-- Array handling
-- String conversion
-- Nested structs
+See the Go example tests for end-to-end samples covering direct copies, registry string handling, and nested arrays.
 
 ## Testing
 
 ```bash
-cd cgocopy
-go test -v
+go test ./...
 go test -bench .
 ```
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2025 shaban
+MIT License – see [LICENSE](LICENSE).

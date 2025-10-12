@@ -5,7 +5,7 @@ package cgocopy
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include "native/cgocopy_metadata.h"
+#include "../../native/cgocopy_metadata.h"
 
 typedef struct {
     int32_t value;

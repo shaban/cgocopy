@@ -3,7 +3,7 @@ package cgocopy
 /*
 #include <stdint.h>
 #include <stdlib.h>
-#include "native/cgocopy_metadata.h"
+#include "../../native/cgocopy_metadata.h"
 
 typedef struct {
     float x;

@@ -1,7 +1,7 @@
 package cgocopy
 
 /*
-#include "native/arch_info.c"
+#include "../../native/arch_info.c"
 */
 import "C"
 import "fmt"

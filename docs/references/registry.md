@@ -179,7 +179,7 @@ Registry works across platforms by:
 - Use Registry for primitives-only structs (use Direct instead)
 - Register the same type multiple times
 - Forget string converters for char* fields
-- Use Registry in performance-critical hot paths (consider StringPtr + Direct)
+- Reach for Registry only when validation or string conversion is required; otherwise prefer Direct
 
 ## Migration from Direct
 

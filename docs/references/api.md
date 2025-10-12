@@ -290,5 +290,4 @@ type FieldInfo struct {
 
 The key insight: *Registration time being irrelevant means we can do arbitrarily complex analysis at build/init time to enable dead-simple runtime APIs.*
 
-The result would be the most developer-friendly C/Go interop library possible, with one API that "just works" for any struct complexity.</content>
-<parameter name="filePath">/Volumes/Space/Code/cgocopy/specs/API.md
+The result would be the most developer-friendly C/Go interop library possible, with one API that "just works" for any struct complexity.

@@ -8,7 +8,7 @@ import (
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "native/cgocopy_metadata.h"
+#include "../../native/cgocopy_metadata.h"
 
 // Test struct matching the AutoLayout example
 typedef struct {
