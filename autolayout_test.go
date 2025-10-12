@@ -11,10 +11,15 @@ func TestAutoLayout(t *testing.T) {
 	layout := AutoLayout("uint32_t", "char*", "float")
 
 	// Verify against actual C offsets
+	meta := autoDeviceMetadata()
+	if len(meta.Fields) != 3 {
+		t.Fatalf("expected 3 metadata fields, got %d", len(meta.Fields))
+	}
+
 	expectedOffsets := []uintptr{
-		GetAutoDeviceIdOffset(),
-		GetAutoDeviceNameOffset(),
-		GetAutoDeviceValueOffset(),
+		meta.Fields[0].Offset,
+		meta.Fields[1].Offset,
+		meta.Fields[2].Offset,
 	}
 
 	if len(layout) != 3 {

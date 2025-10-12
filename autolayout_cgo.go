@@ -8,6 +8,7 @@ import (
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include "native/cgocopy_metadata.h"
 
 // Test struct matching the AutoLayout example
 typedef struct {
@@ -15,12 +16,6 @@ typedef struct {
     char* name;
     float value;
 } AutoDevice;
-
-// Helper functions for manual offset verification
-size_t autoDeviceIdOffset() { return offsetof(AutoDevice, id); }
-size_t autoDeviceNameOffset() { return offsetof(AutoDevice, name); }
-size_t autoDeviceValueOffset() { return offsetof(AutoDevice, value); }
-size_t autoDeviceSize() { return sizeof(AutoDevice); }
 
 // Create a test device
 AutoDevice* createAutoDevice() {
@@ -47,8 +42,6 @@ typedef struct {
     uint16_t port;
 } ComplexAutoDevice;
 
-size_t complexDeviceSize() { return sizeof(ComplexAutoDevice); }
-
 ComplexAutoDevice* createComplexDevice() {
     ComplexAutoDevice* dev = (ComplexAutoDevice*)malloc(sizeof(ComplexAutoDevice));
     dev->flag = 1;
@@ -65,6 +58,20 @@ void freeComplexDevice(ComplexAutoDevice* dev) {
         free(dev);
     }
 }
+
+CGOCOPY_STRUCT_BEGIN(AutoDevice)
+    CGOCOPY_FIELD_PRIMITIVE(AutoDevice, id, uint32_t),
+    CGOCOPY_FIELD_STRING(AutoDevice, name),
+    CGOCOPY_FIELD_PRIMITIVE(AutoDevice, value, float),
+CGOCOPY_STRUCT_END(AutoDevice)
+
+CGOCOPY_STRUCT_BEGIN(ComplexAutoDevice)
+    CGOCOPY_FIELD_PRIMITIVE(ComplexAutoDevice, flag, uint8_t),
+    CGOCOPY_FIELD_PRIMITIVE(ComplexAutoDevice, id, uint32_t),
+    CGOCOPY_FIELD_STRING(ComplexAutoDevice, name),
+    CGOCOPY_FIELD_PRIMITIVE(ComplexAutoDevice, value, double),
+    CGOCOPY_FIELD_PRIMITIVE(ComplexAutoDevice, port, uint16_t),
+CGOCOPY_STRUCT_END(ComplexAutoDevice)
 */
 import "C"
 
@@ -75,15 +82,32 @@ func (c TestConverter) CStringToGo(ptr unsafe.Pointer) string {
 	if ptr == nil {
 		return ""
 	}
-	return C.GoString((*C.char)(ptr))
+	var buf []byte
+	for i := uintptr(0); ; i++ {
+		b := *(*byte)(unsafe.Add(ptr, i))
+		if b == 0 {
+			break
+		}
+		buf = append(buf, b)
+	}
+	return string(buf)
 }
 
-// Helper functions to expose C offsets for testing
-func GetAutoDeviceIdOffset() uintptr    { return uintptr(C.autoDeviceIdOffset()) }
-func GetAutoDeviceNameOffset() uintptr  { return uintptr(C.autoDeviceNameOffset()) }
-func GetAutoDeviceValueOffset() uintptr { return uintptr(C.autoDeviceValueOffset()) }
-func GetAutoDeviceSize() uintptr        { return uintptr(C.autoDeviceSize()) }
-func GetComplexDeviceSize() uintptr     { return uintptr(C.complexDeviceSize()) }
+func autoDeviceMetadata() StructMetadata {
+	return loadStructMetadata(C.cgocopy_get_AutoDevice_info())
+}
+
+func complexAutoDeviceMetadata() StructMetadata {
+	return loadStructMetadata(C.cgocopy_get_ComplexAutoDevice_info())
+}
+
+func GetAutoDeviceSize() uintptr {
+	return autoDeviceMetadata().Size
+}
+
+func GetComplexDeviceSize() uintptr {
+	return complexAutoDeviceMetadata().Size
+}
 
 // Helper to create C test devices
 func CreateAutoDevice() unsafe.Pointer     { return unsafe.Pointer(C.createAutoDevice()) }

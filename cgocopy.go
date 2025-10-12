@@ -51,16 +51,6 @@ Example:
   plugins := GetEnginePlugins(engine.ID)   // Separate array fetch
 */
 
-/*
-#include <stdlib.h>
-#include <string.h>
-
-// Fast memory copy wrapper
-void fastCopy(void* dst, void* src, size_t size) {
-    memcpy(dst, src, size);
-}
-*/
-import "C"
 import (
 	"fmt"
 	"reflect"
@@ -70,13 +60,22 @@ import (
 
 // FieldMapping represents a validated mapping between C and Go struct fields
 type FieldMapping struct {
-	COffset  uintptr
-	GoOffset uintptr
-	Size     uintptr
-	CType    string
-	GoType   reflect.Type
-	IsNested bool // True if this field is a nested struct
-	IsString bool // True if this field is a C string (char*) → Go string
+	COffset           uintptr
+	GoOffset          uintptr
+	Size              uintptr
+	CType             string
+	GoType            reflect.Type
+	Kind              FieldKind
+	IsNested          bool // True if this field is a nested struct or array element is nested
+	IsString          bool // True if this field is a C string (char*) → Go string
+	IsArray           bool
+	ArrayLen          uintptr
+	ArrayElemKind     FieldKind
+	ArrayElemType     string
+	ArrayElemSize     uintptr
+	ArrayElemGoType   reflect.Type
+	ArrayElemIsNested bool
+	ArrayElemIsString bool
 }
 
 // CStringConverter converts C strings (char*) to Go strings
@@ -144,59 +143,144 @@ func (r *Registry) Register(goType reflect.Type, cSize uintptr, cLayout []FieldI
 		goField := goType.Field(i)
 		cField := cLayout[i]
 
-		// Deduce if this is a string field from TypeName
-		isString := cField.TypeName == "char*" || cField.IsString
+		fieldKind := resolveFieldKind(cField)
+		isString := fieldKind == FieldString || cField.TypeName == "char*" || cField.IsString
 		if isString {
 			hasStrings = true
-			// String field: C char* (pointer) → Go string
 			if goField.Type.Kind() != reflect.String {
-				return fmt.Errorf("field %d (%s) has TypeName='char*' but Go type is %v, not string",
-					i, goField.Name, goField.Type.Kind())
+				return fmt.Errorf("field %d (%s) expected Go string but found %v", i, goField.Name, goField.Type.Kind())
 			}
+			fieldKind = FieldString
 		}
 
 		// Deduce size from TypeName if not provided
 		if cField.Size == 0 {
-			size := getSizeFromTypeName(cField.TypeName, archInfo)
-			if size == 0 {
-				return fmt.Errorf("field %d (%s) has Size=0 and unknown TypeName '%s' - cannot deduce size",
-					i, goField.Name, cField.TypeName)
+			if fieldKind == FieldArray {
+				// Fill from Go field size after we compute it below
+				cField.Size = 0
+			} else {
+				size := getSizeFromTypeName(cField.TypeName, archInfo)
+				if size == 0 && fieldKind != FieldStruct {
+					return fmt.Errorf("field %d (%s) has Size=0 and unknown TypeName '%s' - cannot deduce size",
+						i, goField.Name, cField.TypeName)
+				}
+				cField.Size = size
 			}
-			cField.Size = size
 		}
 
-		// Check field sizes match (skip for string fields - they're special)
 		goFieldSize := goField.Type.Size()
-		if !isString && cField.Size != goFieldSize {
-			return fmt.Errorf("field %d (%s) size mismatch: C=%d bytes, Go=%d bytes",
-				i, goField.Name, cField.Size, goFieldSize)
+		switch fieldKind {
+		case FieldString:
+			// Skip size validation; Go string header size differs from C pointer size
+		case FieldStruct:
+			// Nested structs may contain strings or other fields that make the Go size
+			// differ from the C size. We rely on the nested registration for safety.
+		case FieldArray:
+			if cField.Size == 0 {
+				cField.Size = goFieldSize
+			}
+			if cField.Size != goFieldSize {
+				return fmt.Errorf("field %d (%s) array size mismatch: C=%d bytes, Go=%d bytes",
+					i, goField.Name, cField.Size, goFieldSize)
+			}
+		default:
+			if cField.Size != goFieldSize {
+				return fmt.Errorf("field %d (%s) size mismatch: C=%d bytes, Go=%d bytes",
+					i, goField.Name, cField.Size, goFieldSize)
+			}
 		}
 
-		// Check if this is a nested struct
-		isNested := goField.Type.Kind() == reflect.Struct
-
-		if isNested {
-			// Nested struct must be registered first
-			if _, ok := r.mappings[goField.Type]; !ok {
-				return fmt.Errorf("field %d (%s) is a nested struct of type %v which must be registered first",
-					i, goField.Name, goField.Type)
-			}
-		} else if !isString {
-			// Validate type compatibility for primitives (skip strings, they're validated above)
-			if err := validateTypeCompatibility(goField.Type, cField.TypeName); err != nil {
-				return fmt.Errorf("field %d (%s) type incompatible: %w", i, goField.Name, err)
-			}
-		}
-
-		mapping.Fields = append(mapping.Fields, FieldMapping{
+		fieldMapping := FieldMapping{
 			COffset:  cField.Offset,
 			GoOffset: goField.Offset,
 			Size:     goFieldSize,
 			CType:    cField.TypeName,
 			GoType:   goField.Type,
-			IsNested: isNested,
+			Kind:     fieldKind,
 			IsString: isString,
-		})
+		}
+
+		switch fieldKind {
+		case FieldStruct:
+			if goField.Type.Kind() != reflect.Struct {
+				return fmt.Errorf("field %d (%s) declared as struct but Go kind is %v", i, goField.Name, goField.Type.Kind())
+			}
+			if _, ok := r.mappings[goField.Type]; !ok {
+				return fmt.Errorf("field %d (%s) is a nested struct of type %v which must be registered first",
+					i, goField.Name, goField.Type)
+			}
+			fieldMapping.IsNested = true
+
+		case FieldArray:
+			if cField.ElemCount == 0 {
+				return fmt.Errorf("field %d (%s) is declared as array but ElemCount is 0", i, goField.Name)
+			}
+			if goField.Type.Kind() != reflect.Array {
+				return fmt.Errorf("field %d (%s) is declared as array but Go kind is %v", i, goField.Name, goField.Type.Kind())
+			}
+			if uintptr(goField.Type.Len()) != cField.ElemCount {
+				return fmt.Errorf("field %d (%s) array length mismatch: C=%d, Go=%d", i, goField.Name,
+					cField.ElemCount, goField.Type.Len())
+			}
+
+			elemTypeName := cField.ElemType
+			if elemTypeName == "" {
+				elemTypeName = cField.TypeName
+			}
+
+			elemGoType := goField.Type.Elem()
+			arrayElemKind := FieldPrimitive
+			arrayElemIsString := false
+
+			switch elemGoType.Kind() {
+			case reflect.Struct:
+				arrayElemKind = FieldStruct
+				if _, ok := r.mappings[elemGoType]; !ok {
+					return fmt.Errorf("field %d (%s) array element struct %v must be registered first", i, goField.Name, elemGoType)
+				}
+				fieldMapping.ArrayElemIsNested = true
+			case reflect.String:
+				arrayElemKind = FieldString
+				arrayElemIsString = true
+			case reflect.Ptr, reflect.UnsafePointer:
+				arrayElemKind = FieldPointer
+			default:
+				arrayElemKind = FieldPrimitive
+			}
+
+			switch arrayElemKind {
+			case FieldPrimitive, FieldPointer:
+				if err := validateTypeCompatibility(elemGoType, elemTypeName); err != nil {
+					return fmt.Errorf("field %d (%s) array element type incompatible: %w", i, goField.Name, err)
+				}
+			case FieldString:
+				return fmt.Errorf("field %d (%s) array of Go strings is not supported", i, goField.Name)
+			}
+
+			fieldMapping.IsArray = true
+			fieldMapping.ArrayLen = cField.ElemCount
+			fieldMapping.ArrayElemKind = arrayElemKind
+			fieldMapping.ArrayElemType = elemTypeName
+			fieldMapping.ArrayElemSize = elemGoType.Size()
+			fieldMapping.ArrayElemGoType = elemGoType
+			fieldMapping.ArrayElemIsString = arrayElemIsString
+			if fieldMapping.ArrayElemIsNested {
+				fieldMapping.IsNested = true
+			}
+
+		case FieldPointer, FieldPrimitive:
+			if err := validateTypeCompatibility(goField.Type, cField.TypeName); err != nil {
+				return fmt.Errorf("field %d (%s) type incompatible: %w", i, goField.Name, err)
+			}
+		case FieldString:
+			// Already validated
+		default:
+			if err := validateTypeCompatibility(goField.Type, cField.TypeName); err != nil {
+				return fmt.Errorf("field %d (%s) type incompatible: %w", i, goField.Name, err)
+			}
+		}
+
+		mapping.Fields = append(mapping.Fields, fieldMapping)
 	}
 
 	// Validate converter if needed
@@ -208,14 +292,49 @@ func (r *Registry) Register(goType reflect.Type, cSize uintptr, cLayout []FieldI
 	return nil
 }
 
+type FieldKind uint8
+
+const (
+	FieldPrimitive FieldKind = iota
+	FieldPointer
+	FieldString
+	FieldArray
+	FieldStruct
+)
+
 // FieldInfo describes a field in the C struct
 type FieldInfo struct {
-	Offset   uintptr // Required: use C.offsetof() or 0 for AutoLayout
-	Size     uintptr // Optional: if 0, deduced from TypeName using arch_info
-	TypeName string  // Required: C type name (e.g., "uint32_t", "char*", "double")
+	Offset    uintptr   // Required: use C.offsetof() or 0 for AutoLayout
+	Size      uintptr   // Optional: if 0, deduced from TypeName using arch_info
+	TypeName  string    // Required: C type name (e.g., "uint32_t", "char*", "double")
+	Kind      FieldKind // Optional: defaults to primitive if zero
+	ElemType  string    // For arrays: element C type (e.g., "float")
+	ElemCount uintptr   // For arrays: number of elements
 	// IsString is deprecated - automatically deduced from TypeName == "char*"
 	// Keeping for backward compatibility, but new code should omit it
 	IsString bool
+}
+
+func resolveFieldKind(info FieldInfo) FieldKind {
+	if info.Kind != 0 {
+		return info.Kind
+	}
+	if info.ElemCount > 0 {
+		return FieldArray
+	}
+	if info.IsString || info.TypeName == "char*" {
+		return FieldString
+	}
+	if info.TypeName == "struct" {
+		return FieldStruct
+	}
+	if info.TypeName == "pointer" {
+		return FieldPointer
+	}
+	if strings.HasSuffix(info.TypeName, "*") && info.TypeName != "char*" {
+		return FieldPointer
+	}
+	return FieldPrimitive
 }
 
 // getSizeFromTypeName returns the size of a C type based on arch_info
@@ -385,6 +504,15 @@ func alignOffset(offset, align uintptr) uintptr {
 	return ((offset + align - 1) / align) * align
 }
 
+func memCopy(dst, src unsafe.Pointer, size uintptr) {
+	if size == 0 {
+		return
+	}
+	dstSlice := unsafe.Slice((*byte)(dst), size)
+	srcSlice := unsafe.Slice((*byte)(src), size)
+	copy(dstSlice, srcSlice)
+}
+
 // AutoLayout automatically calculates offsets and sizes from C type names.
 // This eliminates the need for offsetof() helpers for standard C struct layouts.
 //
@@ -416,6 +544,8 @@ func AutoLayout(typeNames ...string) []FieldInfo {
 	for i, typeName := range typeNames {
 		size := getSizeFromTypeName(typeName, archInfo)
 		align := getAlignmentFromTypeName(typeName, archInfo)
+		kind := resolveFieldKind(FieldInfo{TypeName: typeName})
+		isString := kind == FieldString
 
 		// Align current offset to field's alignment requirement
 		currentOffset = alignOffset(currentOffset, align)
@@ -424,7 +554,8 @@ func AutoLayout(typeNames ...string) []FieldInfo {
 			Offset:   currentOffset,
 			Size:     size,
 			TypeName: typeName,
-			IsString: typeName == "char*", // Auto-deduce string fields
+			Kind:     kind,
+			IsString: isString,
 		}
 
 		// Move to next field
@@ -515,19 +646,20 @@ func (r *Registry) Copy(dst interface{}, cPtr unsafe.Pointer) error {
 		return fmt.Errorf("struct type %v is not registered", dstElem.Type())
 	}
 
-	// Check if any field needs special handling (nested or string)
+	// Check if any field needs special handling (nested, strings, complex arrays)
 	hasSpecial := false
 	for _, field := range mapping.Fields {
-		if field.IsNested || field.IsString {
+		if field.IsNested || field.IsString || field.Kind == FieldPointer ||
+			(field.IsArray && (field.ArrayElemIsNested || field.ArrayElemIsString || field.ArrayElemKind == FieldPointer)) {
 			hasSpecial = true
 			break
 		}
 	}
 
 	if !hasSpecial {
-		// Fast path: no nested structs or strings, single memcpy
+		// Fast path: no nested structs or strings, use raw memory copy
 		goPtr := unsafe.Pointer(dstElem.Addr().Pointer())
-		C.fastCopy(goPtr, cPtr, C.size_t(mapping.GoSize))
+		memCopy(goPtr, cPtr, mapping.GoSize)
 		return nil
 	}
 
@@ -544,23 +676,41 @@ func (r *Registry) Copy(dst interface{}, cPtr unsafe.Pointer) error {
 			// Convert using registered converter
 			goStr := mapping.StringConverter.CStringToGo(charPtr)
 			field.SetString(goStr)
-		} else if fieldMapping.IsNested {
+		} else if fieldMapping.IsNested && !fieldMapping.IsArray {
 			// Recursively copy nested struct
 			nestedCPtr := unsafe.Add(cPtr, fieldMapping.COffset)
 			if err := r.Copy(field.Addr().Interface(), nestedCPtr); err != nil {
 				return fmt.Errorf("failed to copy nested field %d: %w", i, err)
 			}
+		} else if fieldMapping.IsArray {
+			srcAddr := unsafe.Add(cPtr, fieldMapping.COffset)
+			if fieldMapping.ArrayElemIsNested {
+				elemSize := fieldMapping.ArrayElemSize
+				elemCount := int(fieldMapping.ArrayLen)
+				for j := 0; j < elemCount; j++ {
+					nestedSrc := unsafe.Add(srcAddr, uintptr(j)*elemSize)
+					elemValue := field.Index(j)
+					if !elemValue.CanAddr() {
+						return fmt.Errorf("array element %d of field %d is not addressable", j, i)
+					}
+					if err := r.Copy(elemValue.Addr().Interface(), nestedSrc); err != nil {
+						return fmt.Errorf("failed to copy nested array element %d: %w", j, err)
+					}
+				}
+			} else {
+				if !field.CanAddr() {
+					return fmt.Errorf("array field %d is not addressable", i)
+				}
+				dstAddr := unsafe.Pointer(field.UnsafeAddr())
+				srcSlice := unsafe.Slice((*byte)(srcAddr), fieldMapping.Size)
+				dstSlice := unsafe.Slice((*byte)(dstAddr), fieldMapping.Size)
+				copy(dstSlice, srcSlice)
+			}
 		} else {
 			// Copy primitive field
-			// Cannot use C.fastCopy here because dst may contain Go pointers (strings)
-			// Use Go's memory copy instead
 			srcAddr := unsafe.Add(cPtr, fieldMapping.COffset)
 			dstAddr := unsafe.Add(unsafe.Pointer(dstElem.Addr().Pointer()), fieldMapping.GoOffset)
-
-			// Copy using Go's built-in
-			srcSlice := unsafe.Slice((*byte)(srcAddr), fieldMapping.Size)
-			dstSlice := unsafe.Slice((*byte)(dstAddr), fieldMapping.Size)
-			copy(dstSlice, srcSlice)
+			memCopy(dstAddr, srcAddr, fieldMapping.Size)
 		}
 	}
 
@@ -596,7 +746,7 @@ func (r *Registry) CopyField(dst interface{}, cPtr unsafe.Pointer, fieldIndex in
 	dstAddr := unsafe.Add(unsafe.Pointer(dstElem.Addr().Pointer()), field.GoOffset)
 
 	// Copy the field
-	C.fastCopy(dstAddr, srcAddr, C.size_t(field.Size))
+	memCopy(dstAddr, srcAddr, field.Size)
 
 	return nil
 }

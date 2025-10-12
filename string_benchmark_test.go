@@ -84,3 +84,18 @@ func TestCStringConversion(t *testing.T) {
 		})
 	}
 }
+
+func TestCStringHelperFunctions(t *testing.T) {
+	const input = "Helper function string with 🚀"
+	ptr := createCString(input)
+	defer freeCString(ptr)
+
+	if length := cStrlen(ptr); length != len(input) {
+		t.Fatalf("cStrlen returned %d, expected %d", length, len(input))
+	}
+
+	partialLen := len("Helper function")
+	if got := cGoStringN(ptr, partialLen); got != input[:partialLen] {
+		t.Fatalf("cGoStringN returned %q, expected %q", got, input[:partialLen])
+	}
+}
