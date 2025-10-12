@@ -146,9 +146,18 @@ This document tracks the status of the cgocopy v2 implementation based on the 8-
 
 **Requirements**: C11 or later (GCC 4.9+, Clang 3.3+, MSVC 2015+)
 
-### Phase 8: Integration & Migration 📋 PLANNED
-**Status**: Not Started  
-**Target**: End-to-end testing, benchmarks, and migration guide
+### Phase 8: Integration & Benchmarks � NEXT
+**Status**: Ready to Start  
+**Target**: Complete integration tests and performance validation
+
+**Tasks**:
+- [ ] Create comprehensive integration tests with actual C/Go interop using native2 macros
+- [ ] Performance benchmarks comparing v1 vs v2 (Copy, FastCopy, registration overhead)
+- [ ] Example projects demonstrating cgocopy2 usage patterns
+- [ ] Update main project README with v2 overview
+- [ ] API stability review and v2.0.0 release prep
+
+**Note**: No migration guide needed - no users yet!
 
 ## Macro Syntax Comparison
 
@@ -216,10 +225,11 @@ if err := cgocopy2.ValidateStruct[User](); err != nil {
    - ✅ C11 macros in `native2/` (CGOCOPY_STRUCT, CGOCOPY_FIELD)
 
 4. **Next**: Phase 8
-   - End-to-end integration tests with C/Go interop
+   - End-to-end integration tests with C/Go interop using native2 macros
    - Performance benchmarking (v1 vs v2 comparison)
-   - Write comprehensive migration guide
-   - Update main project documentation
+   - Example projects and usage patterns
+   - Update main project README
+   - v2.0.0 release preparation
 
 ## Notes
 - v1 (`pkg/cgocopy/`) remains stable and untouched

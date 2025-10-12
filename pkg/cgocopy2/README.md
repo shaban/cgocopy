@@ -217,11 +217,12 @@ See `native2/README.md` for complete documentation and `native2/example.c` for u
 
 ## Next Steps
 
-### Phase 8: Integration & Migration
-- Create comprehensive cgo integration tests
-- Performance benchmarks vs v1
-- Migration guide with real-world examples
+### Phase 8: Integration & Benchmarks
+- Create comprehensive cgo integration tests with native2 macros
+- Performance benchmarks vs v1 (Copy, FastCopy, registration)
+- Example projects demonstrating real-world usage
 - Update main project documentation
+- v2.0.0 release preparation
 
 See `docs/migration/IMPLEMENTATION_PLAN.md` for complete roadmap.
 
