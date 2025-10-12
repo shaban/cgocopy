@@ -1,0 +1,99 @@
+# cgocopy2
+
+Package cgocopy2 provides improved type-safe copying between C and Go structures with simplified macros, thread-safe registry, and struct tag support.
+
+## Status
+
+✅ **Phase 1 Complete** - Basic types and error handling implemented and tested.
+
+## Features (Planned)
+
+- **Simplified C Macros**: Use `CGOCOPY_STRUCT(type, ...)` with `_Generic` auto-detection
+- **Thread-Safe Registry**: `sync.RWMutex` for concurrent type registration
+- **Precompilation**: Explicit `Precompile[T any]()` for type registration at init time
+- **Tagged Structs**: Support for `cgocopy:"field_name"` and `cgocopy:"-"` tags
+- **FastCopy**: Zero-allocation copying for primitive types
+- **Validation**: `ValidateStruct[T any]()` helper for debugging
+
+## Current Implementation
+
+### Phase 1: Basic Types ✅
+
+#### Types (`types.go`)
+- `FieldType`: Enum for field categories (Primitive, String, Struct, Array, Slice, Pointer)
+- `FieldInfo`: Metadata for individual struct fields
+- `StructMetadata`: Complete metadata for a struct type
+- `Registry`: Thread-safe registry using `sync.RWMutex`
+
+#### Errors (`errors.go`)
+- Common errors: `ErrNotRegistered`, `ErrNilPointer`, `ErrInvalidType`, etc.
+- `ValidationError`: Field-level validation failures
+- `RegistrationError`: Type registration failures with cause wrapping
+- `CopyError`: Runtime copy errors with field context
+
+#### Tests
+- `types_test.go`: 17 tests covering all type system functionality
+- `errors_test.go`: 10 tests covering all error types and helpers
+- All tests passing ✅
+
+## Next Steps
+
+### Phase 2: Registry & Precompile
+- Implement `Precompile[T any]()` function
+- C metadata integration
+- Type validation
+
+### Phase 3: Mapping with Tags
+- Struct tag parsing (`cgocopy:"field_name"`)
+- Field mapping logic
+- Nested struct support
+
+### Phase 4: Copy Implementation
+- Generic `Copy[T any]()` function
+- C integration for actual copying
+- Field-by-field copying logic
+
+### Phase 5-8
+See `docs/migration/IMPLEMENTATION_PLAN.md` for complete roadmap.
+
+## Testing
+
+```bash
+# Run all tests
+go test ./pkg/cgocopy2/...
+
+# Run with coverage
+go test -cover ./pkg/cgocopy2/...
+
+# Run specific test
+go test -v -run TestRegistry ./pkg/cgocopy2/
+```
+
+## Architecture
+
+```
+pkg/cgocopy2/
+├── types.go          # Core type definitions ✅
+├── types_test.go     # Type system tests ✅
+├── errors.go         # Error types ✅
+├── errors_test.go    # Error tests ✅
+├── registry.go       # [Phase 2] Precompile implementation
+├── registry_test.go  # [Phase 2] Registry tests
+├── mapping.go        # [Phase 3] Field mapping with tags
+├── mapping_test.go   # [Phase 3] Mapping tests
+├── copy.go           # [Phase 4] Copy implementation
+├── copy_test.go      # [Phase 4] Copy tests
+├── fastcopy.go       # [Phase 5] FastCopy optimization
+├── validation.go     # [Phase 6] ValidateStruct helper
+└── README.md         # This file
+```
+
+## Documentation
+
+- **API Specification**: `docs/migration/API_IMPROVEMENTS.md`
+- **Implementation Plan**: `docs/migration/IMPLEMENTATION_PLAN.md`
+- **Migration Status**: `docs/migration/STATUS.md`
+
+## License
+
+See LICENSE file in repository root.
