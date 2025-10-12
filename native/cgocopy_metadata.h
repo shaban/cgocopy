@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <string.h>
 
 #ifndef _Alignof
 #define _Alignof(type) __alignof__(type)
@@ -38,6 +39,14 @@ typedef struct {
     const cgocopy_field_info *fields;
 } cgocopy_struct_info;
 
+typedef struct cgocopy_struct_registry_node {
+    const cgocopy_struct_info *info;
+    struct cgocopy_struct_registry_node *next;
+} cgocopy_struct_registry_node;
+
+void cgocopy_registry_add(cgocopy_struct_registry_node *node);
+const cgocopy_struct_info *cgocopy_lookup_struct_info(const char *name);
+
 #define CGOCOPY_INTERNAL_STRINGIFY(x) CGOCOPY_INTERNAL_STRINGIFY_IMPL(x)
 #define CGOCOPY_INTERNAL_STRINGIFY_IMPL(x) #x
 
@@ -64,6 +73,13 @@ typedef struct {
         .field_count = sizeof(cgocopy_fields_##struct_type) / sizeof(cgocopy_field_info),                           \
         .fields = cgocopy_fields_##struct_type,                                                                     \
     };                                                                                                              \
+    static cgocopy_struct_registry_node cgocopy_registry_node_##struct_type;                                        \
+    static void cgocopy_register_##struct_type(void) __attribute__((constructor));                                  \
+    static void cgocopy_register_##struct_type(void) {                                                              \
+        cgocopy_registry_node_##struct_type.info = &cgocopy_struct_info_##struct_type;                              \
+        cgocopy_registry_node_##struct_type.next = NULL;                                                            \
+        cgocopy_registry_add(&cgocopy_registry_node_##struct_type);                                                 \
+    }                                                                                                               \
     static inline const cgocopy_struct_info *cgocopy_get_##struct_type##_info(void) {                               \
         return &cgocopy_struct_info_##struct_type;                                                                  \
     }

@@ -1,11 +1,13 @@
 package cgocopy
 
 /*
+#include <stdlib.h>
 #include "../../native/cgocopy_metadata.h"
 */
 import "C"
 
 import (
+	"fmt"
 	"unsafe"
 )
 
@@ -15,6 +17,33 @@ type StructMetadata struct {
 	Size      uintptr
 	Alignment uintptr
 	Fields    []FieldInfo
+}
+
+func lookupStructMetadata(name string) (StructMetadata, error) {
+	cName := C.CString(name)
+	if cName == nil {
+		return StructMetadata{}, fmt.Errorf("cgocopy: failed to allocate C string for %s", name)
+	}
+	defer C.free(unsafe.Pointer(cName))
+
+	info := C.cgocopy_lookup_struct_info(cName)
+	if info == nil {
+		return StructMetadata{}, fmt.Errorf("%w: %s", ErrMetadataMissing, name)
+	}
+
+	metadata := StructMetadataFromC(unsafe.Pointer(info))
+	if metadata.Name == "" && metadata.Size == 0 {
+		return StructMetadata{}, fmt.Errorf("cgocopy: metadata for %s is empty", name)
+	}
+	return metadata, nil
+}
+
+// StructMetadataFromC converts a C metadata pointer into a Go StructMetadata value.
+func StructMetadataFromC(info unsafe.Pointer) StructMetadata {
+	if info == nil {
+		return StructMetadata{}
+	}
+	return loadStructMetadata((*C.cgocopy_struct_info)(info))
 }
 
 func loadStructMetadata(info *C.cgocopy_struct_info) StructMetadata {
@@ -43,7 +72,6 @@ func loadStructMetadata(info *C.cgocopy_struct_info) StructMetadata {
 				IsString:  bool(cf.is_string),
 			}
 
-			// Ensure Kind/IsString align with inferred metadata for backward compatibility
 			field.Kind = resolveFieldKind(field)
 			field.IsString = field.IsString || field.Kind == FieldString
 

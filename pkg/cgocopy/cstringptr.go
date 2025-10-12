@@ -2,13 +2,10 @@ package cgocopy
 
 import "unsafe"
 
-// UTF8Converter converts C char* pointers into Go strings without invoking
-// cgo helpers. It walks the byte sequence until the terminating NUL byte and
-// then builds the resulting Go string.
+// UTF8Converter converts C char* pointers into Go strings.
 type UTF8Converter struct{}
 
-// CStringToGo converts a C string pointer into a Go string. It returns an
-// empty string if the pointer is nil.
+// CStringToGo converts a C string pointer into a Go string, returning an empty string for nil.
 func (UTF8Converter) CStringToGo(ptr unsafe.Pointer) string {
 	if ptr == nil {
 		return ""
@@ -24,6 +21,5 @@ func (UTF8Converter) CStringToGo(ptr unsafe.Pointer) string {
 	return string(buf)
 }
 
-// DefaultCStringConverter provides a ready-to-use converter instance that can
-// be shared across registrations.
+// DefaultCStringConverter provides a ready-to-use converter instance.
 var DefaultCStringConverter UTF8Converter
