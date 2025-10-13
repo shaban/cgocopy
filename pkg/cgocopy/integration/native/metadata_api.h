@@ -4,7 +4,7 @@
 #ifndef METADATA_API_H
 #define METADATA_API_H
 
-#include "../../native2/cgocopy_macros.h"
+#include "../../native/cgocopy_macros.h"
 
 // Getter functions for each struct
 

@@ -16,7 +16,7 @@ const metadataTemplate = `// GENERATED CODE - DO NOT EDIT
 // Generated from: {{.InputFile}}
 
 #include <stdlib.h>
-#include "../../native2/cgocopy_macros.h"
+#include "../../native/cgocopy_macros.h"
 #include "structs.h"
 
 {{range $struct := .Structs}}
@@ -40,7 +40,7 @@ const apiHeaderTemplate = `// GENERATED CODE - DO NOT EDIT
 #ifndef METADATA_API_H
 #define METADATA_API_H
 
-#include "../../native2/cgocopy_macros.h"
+#include "../../native/cgocopy_macros.h"
 
 // Getter functions for each struct
 {{range .Structs}}

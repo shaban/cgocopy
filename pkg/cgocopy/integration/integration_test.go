@@ -3,7 +3,7 @@ package integration
 import (
 	"testing"
 
-	"github.com/shaban/cgocopy/pkg/cgocopy2"
+	cgocopy "github.com/shaban/cgocopy/pkg/cgocopy"
 )
 
 // Test 1: Simple struct with primitives
@@ -11,7 +11,7 @@ func TestIntegration_SimplePerson(t *testing.T) {
 	cPerson := CreateSimplePerson(42, 95.5, true)
 	defer FreePointer(cPerson)
 
-	person, err := cgocopy2.Copy[SimplePerson](cPerson)
+	person, err := cgocopy.Copy[SimplePerson](cPerson)
 	if err != nil {
 		t.Fatalf("Copy failed: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestIntegration_User(t *testing.T) {
 	cUser := CreateUser(123, "john_doe", "john@example.com")
 	defer FreeUser(cUser)
 
-	user, err := cgocopy2.Copy[User](cUser)
+	user, err := cgocopy.Copy[User](cUser)
 	if err != nil {
 		t.Fatalf("Copy failed: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestIntegration_Student(t *testing.T) {
 	cStudent := CreateStudent(456, "Alice")
 	defer FreeStudent(cStudent)
 
-	student, err := cgocopy2.Copy[Student](cStudent)
+	student, err := cgocopy.Copy[Student](cStudent)
 	if err != nil {
 		t.Fatalf("Copy failed: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestIntegration_GameObject(t *testing.T) {
 	cObj := CreateGameObject("Player", 100.0, 200.0, 300.0, 10.0, 20.0, 30.0)
 	defer FreeGameObject(cObj)
 
-	obj, err := cgocopy2.Copy[GameObject](cObj)
+	obj, err := cgocopy.Copy[GameObject](cObj)
 	if err != nil {
 		t.Fatalf("Copy failed: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestIntegration_AllTypes(t *testing.T) {
 	cTypes := CreateAllTypes()
 	defer FreePointer(cTypes)
 
-	types, err := cgocopy2.Copy[AllTypes](cTypes)
+	types, err := cgocopy.Copy[AllTypes](cTypes)
 	if err != nil {
 		t.Fatalf("Copy failed: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestIntegration_AllTypes(t *testing.T) {
 // Test 6: FastCopy with primitives
 func TestIntegration_FastCopy_Int32(t *testing.T) {
 	cInt := CreateInt32(12345)
-	result := cgocopy2.FastCopy[int32](cInt)
+	result := cgocopy.FastCopy[int32](cInt)
 
 	if result != 12345 {
 		t.Errorf("FastCopy[int32] failed: got %d, want 12345", result)
@@ -158,7 +158,7 @@ func TestIntegration_FastCopy_Int32(t *testing.T) {
 
 func TestIntegration_FastCopy_Float64(t *testing.T) {
 	cDouble := CreateFloat64(3.14159)
-	result := cgocopy2.FastCopy[float64](cDouble)
+	result := cgocopy.FastCopy[float64](cDouble)
 
 	if result < 3.14 || result > 3.15 {
 		t.Errorf("FastCopy[float64] failed: got %f, want ~3.14159", result)
@@ -167,23 +167,23 @@ func TestIntegration_FastCopy_Float64(t *testing.T) {
 
 // Test 7: Validation
 func TestIntegration_Validation(t *testing.T) {
-	if err := cgocopy2.ValidateStruct[SimplePerson](); err != nil {
+	if err := cgocopy.ValidateStruct[SimplePerson](); err != nil {
 		t.Errorf("SimplePerson validation failed: %v", err)
 	}
-	if err := cgocopy2.ValidateStruct[User](); err != nil {
+	if err := cgocopy.ValidateStruct[User](); err != nil {
 		t.Errorf("User validation failed: %v", err)
 	}
-	if err := cgocopy2.ValidateStruct[Student](); err != nil {
+	if err := cgocopy.ValidateStruct[Student](); err != nil {
 		t.Errorf("Student validation failed: %v", err)
 	}
-	if err := cgocopy2.ValidateStruct[GameObject](); err != nil {
+	if err := cgocopy.ValidateStruct[GameObject](); err != nil {
 		t.Errorf("GameObject validation failed: %v", err)
 	}
-	if err := cgocopy2.ValidateStruct[AllTypes](); err != nil {
+	if err := cgocopy.ValidateStruct[AllTypes](); err != nil {
 		t.Errorf("AllTypes validation failed: %v", err)
 	}
 
-	errors := cgocopy2.ValidateAll()
+	errors := cgocopy.ValidateAll()
 	if len(errors) > 0 {
 		t.Errorf("ValidateAll found errors: %v", errors)
 	}
@@ -191,7 +191,7 @@ func TestIntegration_Validation(t *testing.T) {
 
 // Test 8: GetRegisteredTypes
 func TestIntegration_GetRegisteredTypes(t *testing.T) {
-	types := cgocopy2.GetRegisteredTypes()
+	types := cgocopy.GetRegisteredTypes()
 
 	expectedCount := 6
 	if len(types) < expectedCount {

@@ -2,7 +2,7 @@
 // Generated from: native/structs.h
 
 #include <stdlib.h>
-#include "../../native2/cgocopy_macros.h"
+#include "../../native/cgocopy_macros.h"
 #include "structs.h"
 
 
