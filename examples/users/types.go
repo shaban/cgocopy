@@ -5,9 +5,9 @@ type UserRole struct {
 }
 
 type UserDetails struct {
-	FullName string
-	Roles    []UserRole
-	Level    uint32
+	FullName   string
+	Level      uint32
+	Department string
 }
 
 type User struct {

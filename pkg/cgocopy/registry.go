@@ -203,13 +203,14 @@ func analyzeStructWithC(goType reflect.Type, cInfo CStructInfo) (*StructMetadata
 		IsPrimitive:      false,
 	}
 
-	// Create a map of C field names to C field metadata
+	// Create a map of C field names to C field metadata for name-based lookup
 	cFieldMap := make(map[string]*CFieldInfo)
 	for i := range cInfo.Fields {
 		cFieldMap[cInfo.Fields[i].Name] = &cInfo.Fields[i]
 	}
 
 	// Analyze each Go field and match with C field
+	cFieldIdx := 0 // Track position in C fields for positional matching
 	for i := 0; i < goType.NumField(); i++ {
 		field := goType.Field(i)
 
@@ -223,15 +224,26 @@ func analyzeStructWithC(goType reflect.Type, cInfo CStructInfo) (*StructMetadata
 		if skip {
 			continue
 		}
-		if cName == "" {
-			cName = field.Name
-		}
 
-		// Find matching C field
-		cField, ok := cFieldMap[cName]
-		if !ok {
-			return nil, newValidationError(typeName, field.Name, field.Type, cName,
-				"C field not found in metadata")
+		var cField *CFieldInfo
+		var ok bool
+
+		if cName != "" {
+			// Explicit tag: match by name
+			cField, ok = cFieldMap[cName]
+			if !ok {
+				return nil, newValidationError(typeName, field.Name, field.Type, cName,
+					"C field not found in metadata")
+			}
+		} else {
+			// No tag: match by position (field index)
+			if cFieldIdx >= len(cInfo.Fields) {
+				return nil, newValidationError(typeName, field.Name, field.Type, "",
+					"more Go fields than C fields")
+			}
+			cField = &cInfo.Fields[cFieldIdx]
+			cName = cField.Name // Use C field name for reference
+			cFieldIdx++
 		}
 
 		// Determine field type category
