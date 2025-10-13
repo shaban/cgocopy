@@ -51,6 +51,59 @@ func Precompile[T any]() error {
 	return nil
 }
 
+// PrecompileWithC analyzes a Go struct type and registers it with C struct metadata.
+// This function should be used when copying from C structs that may have different
+// memory layouts than their Go counterparts (different padding/alignment).
+//
+// The C metadata should be extracted from C11 CGOCOPY_STRUCT macros which provide
+// accurate field offsets for the C struct layout.
+//
+// Example:
+//
+//	type User struct {
+//	    ID   int32  `cgocopy:"user_id"`
+//	    Name string `cgocopy:"username"`
+//	}
+//
+//	func init() {
+//	    cMetadata := cgocopy2.CStructInfo{
+//	        Name: "User",
+//	        Size: uintptr(C.sizeof_User),
+//	        Fields: extractCFields(C.CGOCOPY_GET_METADATA(C.User)),
+//	    }
+//	    cgocopy2.PrecompileWithC[User](cMetadata)
+//	}
+func PrecompileWithC[T any](cInfo CStructInfo) error {
+	var zero T
+	goType := reflect.TypeOf(zero)
+
+	// Dereference pointer types
+	if goType.Kind() == reflect.Ptr {
+		goType = goType.Elem()
+	}
+
+	// Check if already registered
+	if globalRegistry.IsRegistered(goType) {
+		return newRegistrationError(goType, "type already registered", ErrAlreadyRegistered)
+	}
+
+	// Validate that it's a struct
+	if goType.Kind() != reflect.Struct {
+		return newRegistrationError(goType, "only struct types can be precompiled", ErrInvalidType)
+	}
+
+	// Analyze the struct using C metadata
+	metadata, err := analyzeStructWithC(goType, cInfo)
+	if err != nil {
+		return newRegistrationError(goType, "failed to analyze struct with C metadata", err)
+	}
+
+	// Register the metadata
+	globalRegistry.Register(goType, metadata)
+
+	return nil
+}
+
 // analyzeStruct uses reflection to extract field metadata from a struct type.
 func analyzeStruct(goType reflect.Type) (*StructMetadata, error) {
 	typeName := goType.Name()
@@ -113,6 +166,107 @@ func analyzeStruct(goType reflect.Type) (*StructMetadata, error) {
 			Type:        fieldType,
 			Offset:      field.Offset,
 			Size:        field.Type.Size(),
+			Skip:        false,
+			Index:       i,
+			ReflectType: field.Type,
+			ArrayLen:    arrayLen,
+			ElemType:    elemType,
+		}
+
+		metadata.Fields = append(metadata.Fields, fieldInfo)
+	}
+
+	// Check if this is effectively a primitive (single primitive field)
+	if len(metadata.Fields) == 1 && metadata.Fields[0].Type == FieldTypePrimitive {
+		metadata.IsPrimitive = true
+	}
+
+	return metadata, nil
+}
+
+// analyzeStructWithC uses reflection combined with C metadata to extract field information.
+// This function uses C struct field offsets instead of Go struct field offsets to handle
+// cases where C and Go have different struct layouts due to padding/alignment.
+func analyzeStructWithC(goType reflect.Type, cInfo CStructInfo) (*StructMetadata, error) {
+	typeName := goType.Name()
+	if typeName == "" {
+		typeName = goType.String()
+	}
+
+	metadata := &StructMetadata{
+		TypeName:         typeName,
+		CTypeName:        cInfo.Name,
+		GoType:           goType,
+		Size:             cInfo.Size,
+		Fields:           make([]FieldInfo, 0, goType.NumField()),
+		HasNestedStructs: false,
+		IsPrimitive:      false,
+	}
+
+	// Create a map of C field names to C field metadata
+	cFieldMap := make(map[string]*CFieldInfo)
+	for i := range cInfo.Fields {
+		cFieldMap[cInfo.Fields[i].Name] = &cInfo.Fields[i]
+	}
+
+	// Analyze each Go field and match with C field
+	for i := 0; i < goType.NumField(); i++ {
+		field := goType.Field(i)
+
+		// Skip unexported fields
+		if !field.IsExported() {
+			continue
+		}
+
+		// Parse struct tags
+		cName, skip := parseTag(field.Tag.Get("cgocopy"))
+		if skip {
+			continue
+		}
+		if cName == "" {
+			cName = field.Name
+		}
+
+		// Find matching C field
+		cField, ok := cFieldMap[cName]
+		if !ok {
+			return nil, newValidationError(typeName, field.Name, field.Type, cName,
+				"C field not found in metadata")
+		}
+
+		// Determine field type category
+		fieldType, err := categorizeFieldType(field.Type)
+		if err != nil {
+			return nil, newValidationError(typeName, field.Name, field.Type, cName, err.Error())
+		}
+
+		// Track nested structs
+		if fieldType == FieldTypeStruct {
+			metadata.HasNestedStructs = true
+		}
+
+		// Get array length and element type for compound types
+		arrayLen := 0
+		var elemType reflect.Type
+		if fieldType == FieldTypeArray {
+			arrayLen = field.Type.Len()
+			elemType = field.Type.Elem()
+			// Validate array length matches C metadata
+			if cField.IsArray && arrayLen != cField.ArrayLen {
+				return nil, newValidationError(typeName, field.Name, field.Type, cName,
+					"array length mismatch with C metadata")
+			}
+		} else if fieldType == FieldTypeSlice || fieldType == FieldTypePointer {
+			elemType = field.Type.Elem()
+		}
+
+		// Use C field offset instead of Go field offset!
+		fieldInfo := FieldInfo{
+			Name:        field.Name,
+			CName:       cName,
+			Type:        fieldType,
+			Offset:      cField.Offset, // <<< Key difference: using C offset
+			Size:        cField.Size,   // <<< Using C size
 			Skip:        false,
 			Index:       i,
 			ReflectType: field.Type,

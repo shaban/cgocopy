@@ -1591,3 +1591,501 @@ go test -cover ./pkg/cgocopy2/...
 - [ ] Examples work with new API
 - [ ] Documentation complete
 - [ ] cgocopy v1 still works (no breakage)
+
+---
+
+## Phase 9: Code Generation Tool
+
+### Overview
+
+Eliminate manual boilerplate by auto-generating metadata code from C header files.
+
+**Current Pain:** 5 manual steps per struct across 4 files
+**Solution:** 1 step (write struct) + `go generate`
+
+### Tasks
+
+- [ ] 9.1: Create `tools/cgocopy-generate/` directory
+- [ ] 9.2: Implement C struct parser (regex-based)
+- [ ] 9.3: Implement code generator with templates
+- [ ] 9.4: Add CLI with flags
+- [ ] 9.5: Test with sample C headers
+- [ ] 9.6: Refactor integration tests to use generator
+- [ ] 9.7: Document tool usage
+- [ ] 9.8: Add to CI pipeline
+
+### Directory Structure
+
+```
+tools/
+└── cgocopy-generate/
+    ├── main.go          # CLI and orchestration
+    ├── parser.go        # C struct parser
+    ├── generator.go     # Code generation
+    ├── templates.go     # Output templates
+    ├── parser_test.go   # Parser tests
+    └── generator_test.go # Generator tests
+```
+
+### Implementation Details
+
+#### 9.2 Parser (parser.go)
+
+```go
+package main
+
+import (
+    "regexp"
+    "strings"
+)
+
+type Field struct {
+    Name      string
+    Type      string
+    ArraySize string // empty if not array
+}
+
+type Struct struct {
+    Name   string
+    Fields []Field
+}
+
+// parseStructs extracts struct definitions from C code
+func parseStructs(content string) ([]Struct, error) {
+    var structs []Struct
+    
+    // Remove comments
+    content = removeComments(content)
+    
+    // Match struct definitions: typedef struct { ... } Name; or struct Name { ... };
+    structRegex := regexp.MustCompile(`(?:typedef\s+)?struct(?:\s+(\w+))?\s*\{([^}]+)\}(?:\s*(\w+))?`)
+    matches := structRegex.FindAllStringSubmatch(content, -1)
+    
+    for _, match := range matches {
+        // Extract struct name (either before or after body)
+        name := match[1]
+        if name == "" {
+            name = match[3]
+        }
+        if name == "" {
+            continue // Anonymous struct, skip
+        }
+        
+        body := match[2]
+        s := Struct{Name: name}
+        
+        // Parse fields: type name; or type name[size];
+        fieldRegex := regexp.MustCompile(`([a-zA-Z_][\w\s\*]+?)\s+(\w+)(?:\[(\d+)\])?\s*;`)
+        fieldMatches := fieldRegex.FindAllStringSubmatch(body, -1)
+        
+        for _, fm := range fieldMatches {
+            fieldType := strings.TrimSpace(fm[1])
+            fieldName := fm[2]
+            arraySize := fm[3]
+            
+            s.Fields = append(s.Fields, Field{
+                Name:      fieldName,
+                Type:      fieldType,
+                ArraySize: arraySize,
+            })
+        }
+        
+        if len(s.Fields) > 0 {
+            structs = append(structs, s)
+        }
+    }
+    
+    return structs, nil
+}
+
+func removeComments(content string) string {
+    // Remove // comments
+    lineComment := regexp.MustCompile(`//.*`)
+    content = lineComment.ReplaceAllString(content, "")
+    
+    // Remove /* */ comments
+    blockComment := regexp.MustCompile(`(?s)/\*.*?\*/`)
+    content = blockComment.ReplaceAllString(content, "")
+    
+    return content
+}
+```
+
+#### 9.3 Generator (generator.go)
+
+```go
+package main
+
+import (
+    "os"
+    "text/template"
+)
+
+type TemplateData struct {
+    InputFile string
+    Structs   []Struct
+}
+
+var metadataTemplate = `// GENERATED CODE - DO NOT EDIT
+// Generated from: {{.InputFile}}
+
+#include "../../native2/cgocopy_macros.h"
+#include "structs.h"
+
+{{range .Structs}}
+// Metadata for {{.Name}}
+CGOCOPY_STRUCT({{.Name}},
+{{- range $idx, $field := .Fields}}
+    CGOCOPY_FIELD({{$.Name}}, {{$field.Name}}){{if ne $idx (sub1 (len $.Fields))}},{{end}}
+{{- end}}
+)
+
+const cgocopy_struct_info* get_{{.Name}}_metadata(void) {
+    return &cgocopy_metadata_{{.Name}};
+}
+{{end}}
+`
+
+var apiHeaderTemplate = `// GENERATED CODE - DO NOT EDIT
+// Generated from: {{.InputFile}}
+
+#ifndef METADATA_API_H
+#define METADATA_API_H
+
+#include "../../native2/cgocopy_macros.h"
+
+// Getter functions for each struct
+{{range .Structs}}
+const cgocopy_struct_info* get_{{.Name}}_metadata(void);
+{{end}}
+
+#endif // METADATA_API_H
+`
+
+func generateMetadata(data TemplateData, outputFile string) error {
+    tmpl := template.Must(template.New("metadata").Funcs(template.FuncMap{
+        "sub1": func(n int) int { return n - 1 },
+    }).Parse(metadataTemplate))
+    
+    f, err := os.Create(outputFile)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+    
+    return tmpl.Execute(f, data)
+}
+
+func generateAPIHeader(data TemplateData, outputFile string) error {
+    tmpl := template.Must(template.New("api").Parse(apiHeaderTemplate))
+    
+    f, err := os.Create(outputFile)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+    
+    return tmpl.Execute(f, data)
+}
+```
+
+#### 9.4 CLI (main.go)
+
+```go
+package main
+
+import (
+    "flag"
+    "fmt"
+    "os"
+    "strings"
+)
+
+func main() {
+    input := flag.String("input", "", "Input C header file")
+    output := flag.String("output", "", "Output C file (default: input_meta.c)")
+    apiHeader := flag.String("api", "", "Output API header file (optional)")
+    flag.Parse()
+    
+    if *input == "" {
+        fmt.Fprintln(os.Stderr, "Usage: cgocopy-generate -input=file.h [-output=file_meta.c] [-api=api.h]")
+        os.Exit(1)
+    }
+    
+    // Read input file
+    content, err := os.ReadFile(*input)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error reading %s: %v\n", *input, err)
+        os.Exit(1)
+    }
+    
+    // Parse structs
+    structs, err := parseStructs(string(content))
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error parsing structs: %v\n", err)
+        os.Exit(1)
+    }
+    
+    if len(structs) == 0 {
+        fmt.Fprintf(os.Stderr, "Warning: No structs found in %s\n", *input)
+        os.Exit(0)
+    }
+    
+    fmt.Printf("Found %d struct(s): ", len(structs))
+    for i, s := range structs {
+        if i > 0 {
+            fmt.Print(", ")
+        }
+        fmt.Print(s.Name)
+    }
+    fmt.Println()
+    
+    data := TemplateData{
+        InputFile: *input,
+        Structs:   structs,
+    }
+    
+    // Generate metadata implementation
+    if *output == "" {
+        *output = strings.TrimSuffix(*input, ".h") + "_meta.c"
+    }
+    
+    if err := generateMetadata(data, *output); err != nil {
+        fmt.Fprintf(os.Stderr, "Error generating metadata: %v\n", err)
+        os.Exit(1)
+    }
+    fmt.Printf("Generated: %s\n", *output)
+    
+    // Generate API header if requested
+    if *apiHeader != "" {
+        if err := generateAPIHeader(data, *apiHeader); err != nil {
+            fmt.Fprintf(os.Stderr, "Error generating API header: %v\n", err)
+            os.Exit(1)
+        }
+        fmt.Printf("Generated: %s\n", *apiHeader)
+    }
+}
+```
+
+### Testing Phase 9
+
+#### 9.5 Parser Tests
+
+```go
+// parser_test.go
+package main
+
+import (
+    "testing"
+)
+
+func TestParseStructs_Simple(t *testing.T) {
+    input := `
+typedef struct {
+    int id;
+    double value;
+} SimplePerson;
+`
+    
+    structs, err := parseStructs(input)
+    if err != nil {
+        t.Fatalf("parseStructs failed: %v", err)
+    }
+    
+    if len(structs) != 1 {
+        t.Fatalf("expected 1 struct, got %d", len(structs))
+    }
+    
+    s := structs[0]
+    if s.Name != "SimplePerson" {
+        t.Errorf("expected name 'SimplePerson', got '%s'", s.Name)
+    }
+    
+    if len(s.Fields) != 2 {
+        t.Fatalf("expected 2 fields, got %d", len(s.Fields))
+    }
+}
+
+func TestParseStructs_WithArrays(t *testing.T) {
+    input := `
+struct Student {
+    int id;
+    char name[32];
+    int grades[5];
+};
+`
+    
+    structs, err := parseStructs(input)
+    if err != nil {
+        t.Fatalf("parseStructs failed: %v", err)
+    }
+    
+    if len(structs[0].Fields) != 3 {
+        t.Fatalf("expected 3 fields, got %d", len(structs[0].Fields))
+    }
+    
+    nameField := structs[0].Fields[1]
+    if nameField.ArraySize != "32" {
+        t.Errorf("expected array size '32', got '%s'", nameField.ArraySize)
+    }
+}
+
+func TestRemoveComments(t *testing.T) {
+    input := `
+// This is a comment
+struct Test { // inline comment
+    int x; /* block comment */
+};
+/* Multi-line
+   comment */
+`
+    
+    result := removeComments(input)
+    
+    if strings.Contains(result, "//") || strings.Contains(result, "/*") {
+        t.Error("comments should be removed")
+    }
+}
+```
+
+#### 9.6 Integration Test
+
+Update `pkg/cgocopy2/integration/` to use generator:
+
+```go
+// integration/integration_cgo.go
+package integration
+
+//go:generate cgocopy-generate -input=native/structs.h -output=native/structs_meta.c -api=native/metadata_api.h
+
+/*
+#cgo CFLAGS: -I${SRCDIR}/../native2
+#include "native/metadata_api.h"
+#include "native/structs_meta.c"
+*/
+import "C"
+```
+
+Then run:
+```bash
+cd pkg/cgocopy2/integration
+go generate ./...
+go test -v
+```
+
+**Expected:**
+- ✅ `native/structs_meta.c` generated
+- ✅ `native/metadata_api.h` generated
+- ✅ All 9 integration tests pass
+- ✅ Generated code compiles without errors
+
+#### 9.7 Documentation
+
+Create `tools/cgocopy-generate/README.md`:
+
+```markdown
+# cgocopy-generate
+
+Automatic metadata generation for cgocopy v2.
+
+## Installation
+
+```bash
+go install github.com/shaban/cgocopy/tools/cgocopy-generate@latest
+```
+
+## Usage
+
+```bash
+cgocopy-generate -input=native/structs.h -output=native/structs_meta.c -api=native/metadata_api.h
+```
+
+## Integration with go generate
+
+Add to your Go file:
+
+```go
+//go:generate cgocopy-generate -input=native/structs.h -output=native/structs_meta.c -api=native/metadata_api.h
+```
+
+Run:
+```bash
+go generate ./...
+```
+
+## What It Does
+
+1. Parses C struct definitions from header file
+2. Generates `CGOCOPY_STRUCT` macro calls
+3. Generates getter functions
+4. Generates API header with declarations
+
+## Example
+
+**Input (structs.h):**
+```c
+typedef struct {
+    int id;
+    double score;
+} SimplePerson;
+```
+
+**Generated (structs_meta.c):**
+```c
+CGOCOPY_STRUCT(SimplePerson,
+    CGOCOPY_FIELD(SimplePerson, id),
+    CGOCOPY_FIELD(SimplePerson, score)
+)
+
+const cgocopy_struct_info* get_SimplePerson_metadata(void) {
+    return &cgocopy_metadata_SimplePerson;
+}
+```
+
+## Limitations
+
+- Simple struct definitions only
+- No preprocessor macro expansion
+- No cross-file type resolution
+
+Works for 90% of use cases!
+```
+
+#### 9.8 CI Integration
+
+Add to `.github/workflows/test.yml`:
+
+```yaml
+- name: Check generated code is up to date
+  run: |
+    go generate ./...
+    git diff --exit-code || (echo "Generated code is out of date. Run 'go generate ./...' and commit changes." && exit 1)
+```
+
+### Success Criteria Phase 9
+
+- [ ] Parser handles common struct patterns
+- [ ] Generator produces valid C code
+- [ ] CLI flags work correctly
+- [ ] Integration tests pass with generated code
+- [ ] Tool runs in < 100ms
+- [ ] Zero external dependencies
+- [ ] Documentation complete
+- [ ] CI catches stale generated code
+
+### Benefits Summary
+
+**Before:**
+- ✍️ Write struct in `.h`
+- ✍️ Write `CGOCOPY_STRUCT` in `.c`
+- ✍️ Write getter in `.c`
+- ✍️ Declare getter in `.h`
+- ✍️ Register in Go
+- ⏱️ **5-10 minutes per struct**
+
+**After:**
+- ✍️ Write struct in `.h`
+- 🤖 Run `go generate`
+- ⏱️ **30 seconds per struct**
+
+**Impact:** 80% reduction in manual work, zero chance of typos, always in sync!

@@ -39,7 +39,7 @@ func ValidateStruct[T any]() error {
 	// Check if registered
 	metadata := globalRegistry.Get(goType)
 	if metadata == nil {
-		return newValidationError(goType.Name(), "", goType, "", 
+		return newValidationError(goType.Name(), "", goType, "",
 			fmt.Sprintf("type not registered - call Precompile[%s]() first", goType.Name()))
 	}
 
@@ -80,12 +80,12 @@ func validateMetadata(metadata *StructMetadata) error {
 // validateField checks if a single field is valid.
 func validateField(typeName string, field *FieldInfo) error {
 	if field.Name == "" {
-		return newValidationError(typeName, "", field.ReflectType, "", 
+		return newValidationError(typeName, "", field.ReflectType, "",
 			"field has empty name")
 	}
 
 	if field.ReflectType == nil {
-		return newValidationError(typeName, field.Name, nil, field.CName, 
+		return newValidationError(typeName, field.Name, nil, field.CName,
 			"field missing reflect type")
 	}
 
@@ -98,8 +98,8 @@ func validateField(typeName string, field *FieldInfo) error {
 		}
 
 	case FieldTypeString:
-		if field.ReflectType.Kind() != reflect.String && 
-		   field.ReflectType.Kind() != reflect.Ptr {
+		if field.ReflectType.Kind() != reflect.String &&
+			field.ReflectType.Kind() != reflect.Ptr {
 			return newValidationError(typeName, field.Name, field.ReflectType, field.CName,
 				fmt.Sprintf("field marked as string but has kind %v", field.ReflectType.Kind()))
 		}

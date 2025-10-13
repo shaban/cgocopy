@@ -191,3 +191,39 @@ func (r *Registry) Clear() {
 
 // globalRegistry is the package-level registry instance.
 var globalRegistry = NewRegistry()
+
+// CFieldInfo represents metadata for a C struct field extracted from C macros.
+type CFieldInfo struct {
+	// Name is the field name in the C struct.
+	Name string
+
+	// Type is the C type string (e.g., "int32", "string", "float64").
+	Type string
+
+	// Offset is the byte offset in the C struct.
+	Offset uintptr
+
+	// Size is the size in bytes.
+	Size uintptr
+
+	// IsPointer indicates if this is a pointer field.
+	IsPointer bool
+
+	// IsArray indicates if this is an array field.
+	IsArray bool
+
+	// ArrayLen is the array length (0 if not an array).
+	ArrayLen int
+}
+
+// CStructInfo represents metadata for a complete C struct extracted from C macros.
+type CStructInfo struct {
+	// Name is the C struct name.
+	Name string
+
+	// Size is the total size of the C struct.
+	Size uintptr
+
+	// Fields contains metadata for all fields.
+	Fields []CFieldInfo
+}

@@ -29,12 +29,12 @@ import (
 func FastCopy[T any](cPtr unsafe.Pointer) T {
 	var zero T
 	typ := reflect.TypeOf(zero)
-	
+
 	// Validate it's a primitive type
 	if !isPrimitiveKind(typ.Kind()) {
 		panic("FastCopy only works with primitive types (int, uint, float, bool)")
 	}
-	
+
 	// Perform direct memory copy based on size
 	switch typ.Size() {
 	case 1:
