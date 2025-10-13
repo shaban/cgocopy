@@ -1,9 +1,12 @@
 package integration
 
+//go:generate ../../../tools/cgocopy-generate/cgocopy-generate -input=native/structs.h -output=native/structs_meta.c -api=native/metadata_api.h
+
 /*
 #cgo CFLAGS: -I${SRCDIR}/../native2
 #include "native/metadata_api.h"
-#include "native/structs.c"  // CGO requires including .c files to compile them
+#include "native/structs_meta.c"  // Generated metadata
+#include "native/helpers.c"       // Test helper functions
 */
 import "C"
 import (
