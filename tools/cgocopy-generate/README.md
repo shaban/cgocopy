@@ -23,13 +23,14 @@ go build
 ### Command Line
 
 ```bash
-cgocopy-generate -input=structs.h [-output=structs_meta.c] [-api=metadata_api.h]
+cgocopy-generate -input=structs.h [-output=structs_meta.c] [-api=metadata_api.h] [-header-path=path]
 ```
 
 **Flags:**
 - `-input` (required): Path to C header file containing struct definitions
 - `-output` (optional): Path to generated metadata file (default: `<input>_meta.c`)
 - `-api` (optional): Path to generated API header file with getter declarations
+- `-header-path` (optional): Path to cgocopy_macros.h (default: auto-detected from go.mod)
 
 ### With go generate
 
@@ -123,7 +124,7 @@ Example:
 // Generated from: structs.h
 
 #include <stdlib.h>
-#include "../../native2/cgocopy_macros.h"
+#include "../../../pkg/cgocopy/native/cgocopy_macros.h"
 #include "structs.h"
 
 // Metadata for Person
@@ -147,7 +148,7 @@ Contains getter function declarations:
 #ifndef METADATA_API_H
 #define METADATA_API_H
 
-#include "../../native2/cgocopy_macros.h"
+#include "../../../pkg/cgocopy/native/cgocopy_macros.h"
 
 // Getter functions for each struct
 const cgocopy_struct_info* get_Person_metadata(void);
@@ -155,11 +156,31 @@ const cgocopy_struct_info* get_Person_metadata(void);
 #endif // METADATA_API_H
 ```
 
+## Header Path Auto-Detection
+
+The tool automatically detects the path to `cgocopy_macros.h`:
+
+1. Finds `go.mod` by walking up from the output directory
+2. Locates `pkg/cgocopy/native/cgocopy_macros.h` from module root
+3. Calculates relative path from output location to macros file
+
+**Example:**
+- Output: `examples/users/native/structs_meta.c`
+- Module root: `/path/to/project/`
+- Macros: `/path/to/project/pkg/cgocopy/native/cgocopy_macros.h`
+- Generated include: `#include "../../../pkg/cgocopy/native/cgocopy_macros.h"`
+
+Override auto-detection with `-header-path` flag if needed:
+```bash
+cgocopy-generate -input=structs.h -output=metadata.c -header-path=custom/path/cgocopy_macros.h
+```
+
 ## Performance
 
 - Fast: < 10ms for typical header files
 - Zero external dependencies (stdlib only)
 - Regex-based parser (simple, no complex AST)
+- Auto-detects header paths (no hardcoded paths)
 
 ## Example Workflow
 
@@ -175,9 +196,9 @@ const cgocopy_struct_info* get_Person_metadata(void);
 1. Write C struct definition in `structs.h`
 2. Run `go generate`
 
-## Integration Testing
+## Complete Examples
 
-See `pkg/cgocopy2/integration/` for a complete working example with:
+See `examples/users/` for a complete working example with:
 - 6 different struct types (simple, nested, arrays, all types)
 - Generated metadata (`native/structs_meta.c`)
 - Generated API header (`native/metadata_api.h`)

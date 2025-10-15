@@ -7,8 +7,9 @@ import (
 
 // TemplateData contains data for template rendering
 type TemplateData struct {
-	InputFile string
-	Structs   []Struct
+	InputFile  string
+	Structs    []Struct
+	MacrosPath string
 }
 
 // Metadata implementation template
@@ -16,7 +17,7 @@ const metadataTemplate = `// GENERATED CODE - DO NOT EDIT
 // Generated from: {{.InputFile}}
 
 #include <stdlib.h>
-#include "../../native/cgocopy_macros.h"
+#include "{{.MacrosPath}}"
 #include "structs.h"
 
 {{range $struct := .Structs}}
@@ -40,7 +41,7 @@ const apiHeaderTemplate = `// GENERATED CODE - DO NOT EDIT
 #ifndef METADATA_API_H
 #define METADATA_API_H
 
-#include "../../native/cgocopy_macros.h"
+#include "{{.MacrosPath}}"
 
 // Getter functions for each struct
 {{range .Structs}}

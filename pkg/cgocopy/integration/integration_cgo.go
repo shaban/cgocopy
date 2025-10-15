@@ -1,6 +1,6 @@
 package integration
 
-//go:generate ../../../tools/cgocopy-generate/cgocopy-generate -input=native/structs.h -output=native/structs_meta.c -api=native/metadata_api.h
+//go:generate ../../../tools/cgocopy-generate/cgocopy-generate -input=native/structs.h -output=native/structs_meta.c -api=native/metadata_api.h -header-path=../../native/cgocopy_macros.h
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/..
